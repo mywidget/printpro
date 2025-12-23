@@ -1,0 +1,7 @@
+{
+  "name": "PrintPro POS - Printing Management System",
+  "description": "A comprehensive cashier and order management system for printing businesses featuring dynamic pricing, job tracking, and AI-assisted order processing.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
