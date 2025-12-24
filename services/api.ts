@@ -1,21 +1,29 @@
 
 import { Order, Product, InventoryItem, Customer, StoreSettings, OrderStatus, CategoryItem } from '../types';
 
-const API_BASE_URL = 'httpa://printpro.go/api'; 
+const API_BASE_URL = 'https://printpro.go/api'; 
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
     let errorMessage = `API Error: ${response.status}`;
     try {
       const text = await response.text();
+      console.error("Server Response Text:", text); // Log response mentah untuk debugging
+      
       if (text.includes('<h1>A Database Error Occurred</h1>')) {
         const match = text.match(/<p>Error Number: (.*?)<\/p><p>(.*?)<\/p>/);
         errorMessage = match ? `Database Error [${match[1]}]: ${match[2]}` : "Kesalahan Database Server.";
       } else {
-        const errorData = JSON.parse(text);
-        errorMessage = errorData.message || errorMessage;
+        try {
+          const errorData = JSON.parse(text);
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = text.substring(0, 100) || errorMessage;
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Error parsing error response:", e);
+    }
     throw new Error(errorMessage);
   }
   return response.json();
@@ -24,7 +32,6 @@ const handleResponse = async (response: Response) => {
 const mapOrder = (o: any): Order => {
   let items = [];
   try {
-    // Menangani jika items datang sebagai string JSON dari database
     items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || o.items_json || []);
   } catch (e) {
     console.error("Failed to parse order items for order:", o.id);
@@ -72,8 +79,11 @@ export const ApiService = {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order)
   })),
   
-  updateOrderStatus: async (id: string, status: OrderStatus) => handleResponse(await fetch(`${API_BASE_URL}/orders/${id}/status`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
+  // Perbaikan: Menggunakan POST untuk update status (lebih kompatibel dengan server PHP)
+  updateOrderStatus: async (id: string, status: OrderStatus) => handleResponse(await fetch(`${API_BASE_URL}/update_status`, {
+    method: 'POST', 
+    headers: { 'Content-Type': 'application/json' }, 
+    body: JSON.stringify({ id, status })
   })),
 
   upsertProduct: async (product: Product) => handleResponse(await fetch(`${API_BASE_URL}/products`, {

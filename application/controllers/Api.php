@@ -58,7 +58,7 @@
 					else $this->db->insert('categories', $data);
 				}
 			}
-			
+			 
 			// 2. Sinkron Produk
 			if (!empty($json['products'])) {
 				foreach ($json['products'] as $p) {
@@ -239,4 +239,5 @@
 				$this->_json($data);
 			}
 		}
-	}	
+		
+	}			
