@@ -1,8 +1,12 @@
 
 import { Order, Product, InventoryItem, Customer, StoreSettings, OrderStatus, CategoryItem, User } from '../types';
 
-const API_BASE_URL = 'https://printpro.go/api'; 
-  
+// Mendeteksi URL secara dinamis
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE_URL = isLocal 
+  ? 'http://localhost/percetakan/index.php/api' 
+  : `${window.location.origin}/index.php/api`; 
+
 const handleResponse = async (response: Response) => {
   const text = await response.text();
   
