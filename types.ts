@@ -130,4 +130,5 @@ export interface DashboardStats {
   pendingOrders: number;
   completedToday: number;
   revenueByDay: { date: string; amount: number }[];
+  productSales: { name: string; quantity: number }[];
 }

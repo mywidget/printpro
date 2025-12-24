@@ -120,16 +120,14 @@ const App: React.FC = () => {
     };
     try {
       if (useApi) {
-        // Mode Online: Sinkronisasi Pelanggan ke Server
         if (newOrder.customerName) {
-           // Cari apakah pelanggan sudah ada di state lokal untuk mendapatkan ID dan akumulasi
            const existing = customers.find(c => 
              (c.phone && c.phone.trim() === newOrder.customerPhone.trim()) || 
              (c.name.toLowerCase() === newOrder.customerName.toLowerCase())
            );
            
            await ApiService.upsertCustomer({
-             id: existing ? existing.id : `cust-${Date.now()}`, // Kirim ID agar backend tidak error
+             id: existing ? existing.id : `cust-${Date.now()}`,
              name: newOrder.customerName,
              phone: newOrder.customerPhone,
              total_orders: (existing?.totalOrders || 0) + 1,
@@ -313,7 +311,20 @@ const App: React.FC = () => {
       const amount = activeOrders.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
       revenueByDay.push({ date: d.toLocaleDateString('id-ID', { weekday: 'short' }), amount });
     }
-    return { totalSales, totalReceivable, pendingOrders, completedToday, problematicCount, revenueByDay };
+
+    // Kalkulasi Penjualan Produk (Top 5)
+    const productMap: Record<string, number> = {};
+    activeOrders.forEach(o => {
+      o.items.forEach(item => {
+        productMap[item.productName] = (productMap[item.productName] || 0) + item.quantity;
+      });
+    });
+    const productSales = Object.entries(productMap)
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
+
+    return { totalSales, totalReceivable, pendingOrders, completedToday, problematicCount, revenueByDay, productSales };
   }, [orders]);
 
   const renderContent = () => {
