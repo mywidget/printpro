@@ -2,7 +2,7 @@
 import { Order, Product, InventoryItem, Customer, StoreSettings, OrderStatus, CategoryItem, User } from '../types';
 
 // Sesuaikan URL ini dengan lokasi folder project CodeIgniter Anda
-const API_BASE_URL = 'https://kasirpro.thm.my.id/api'; 
+const API_BASE_URL = 'https://apiprintpro.go/api'; 
 
 const handleResponse = async (response: Response) => {
   const text = await response.text();
