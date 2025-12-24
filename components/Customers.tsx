@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Customer } from '../types';
 
 interface CustomersProps {
@@ -7,16 +7,34 @@ interface CustomersProps {
   onEditCustomer: (customer: Customer) => void;
 }
 
+const ITEMS_PER_PAGE = 12;
+
 const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState<Partial<Customer>>({});
 
-  const filteredCustomers = (customers || []).filter(c => 
-    (c.name || '').toLowerCase().includes(search.toLowerCase()) || 
-    (c.phone || '').includes(search)
-  );
+  // Filter Logic
+  const filteredCustomers = useMemo(() => {
+    return (customers || []).filter(c => 
+      (c.name || '').toLowerCase().includes(search.toLowerCase()) || 
+      (c.phone || '').includes(search)
+    );
+  }, [customers, search]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+  const paginatedCustomers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredCustomers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredCustomers, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const openEditModal = (customer: Customer) => {
     setEditingCustomer(customer);
@@ -33,7 +51,7 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
   };
 
   return (
-    <div className="p-4 md:p-8">
+    <div className="p-4 md:p-8 pb-24">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-black text-slate-900">Database Pelanggan</h2>
@@ -45,13 +63,13 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
             placeholder="Cari nama atau telepon..."
             className="w-full sm:w-72 pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm group-hover:shadow-md"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
           />
           <span className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors">🔍</span>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50/80 border-b border-slate-200">
@@ -64,7 +82,7 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredCustomers.map((customer) => {
+              {paginatedCustomers.map((customer) => {
                 const starCount = Math.max(0, Math.min(5, Math.ceil(Number(customer.totalOrders) / 2)));
                 
                 return (
@@ -73,7 +91,6 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
                       <p className="text-sm font-black text-slate-900">{customer.name}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">{customer.phone}</span>
-                        {customer.email && <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{customer.email}</span>}
                       </div>
                     </td>
                     <td className="px-6 py-5 text-center">
@@ -102,13 +119,12 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
                   </tr>
                 );
               })}
-              {filteredCustomers.length === 0 && (
+              {paginatedCustomers.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-24 text-center">
                      <div className="max-w-xs mx-auto">
                         <p className="text-4xl mb-4 grayscale">👥</p>
                         <p className="text-slate-400 text-sm font-black uppercase tracking-widest">Tidak ada pelanggan</p>
-                        <p className="text-slate-300 text-xs mt-2">Data pelanggan otomatis terbuat saat input order baru.</p>
                      </div>
                   </td>
                 </tr>
@@ -117,6 +133,31 @@ const Customers: React.FC<CustomersProps> = ({ customers, onEditCustomer }) => {
           </table>
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-4 bg-white rounded-3xl border border-slate-200 shadow-sm">
+           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+             Halaman {currentPage} dari {totalPages}
+           </p>
+           <div className="flex items-center gap-2">
+             <button 
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-all"
+             >
+               ⬅️
+             </button>
+             <button 
+                disabled={currentPage === totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-all"
+             >
+               ➡️
+             </button>
+           </div>
+        </div>
+      )}
 
       {/* Modal Edit Pelanggan */}
       {isModalOpen && (
