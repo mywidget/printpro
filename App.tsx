@@ -37,10 +37,9 @@ const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [categories, setCategories] = useState<CategoryItem[]>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
 
@@ -64,7 +63,7 @@ const App: React.FC = () => {
         setOrders(ords);
         setCustomers(custs);
         setSettings(sett || DEFAULT_SETTINGS);
-        if (cats && cats.length > 0) setCategories(cats);
+        setCategories(cats && cats.length > 0 ? cats : DEFAULT_CATEGORIES);
       } else {
         setProducts(StorageService.getProducts());
         setInventory(StorageService.getInventory());
@@ -85,119 +84,148 @@ const App: React.FC = () => {
     loadData();
   }, [useApi]);
 
-  // --- AUTOMATIC SYNC HANDLERS ---
+  const handlePush = async () => {
+    try {
+      const payload = {
+        products: StorageService.getProducts(),
+        inventory: StorageService.getInventory(),
+        orders: StorageService.getOrders(),
+        customers: StorageService.getCustomers(),
+        settings: StorageService.getSettings(settings),
+        categories: StorageService.getCategories(categories)
+      };
 
-  const handleUpdateProducts = async (newProducts: Product[]) => {
-    if (useApi) {
-      try {
-        if (newProducts.length > products.length) {
-          const added = newProducts.find(p => !products.find(op => op.id === p.id));
-          if (added) await ApiService.upsertProduct(added);
-        } else if (newProducts.length < products.length) {
-          const deleted = products.find(p => !newProducts.find(np => np.id === p.id));
-          if (deleted) await ApiService.deleteProduct(deleted.id);
-        } else {
-          const updated = newProducts.find(p => {
-             const old = products.find(op => op.id === p.id);
-             return JSON.stringify(old) !== JSON.stringify(p);
-          });
-          if (updated) await ApiService.upsertProduct(updated);
-        }
-      } catch (e) { alert(`Server Error: ${e instanceof Error ? e.message : 'Gagal sinkronisasi produk.'}`); return; }
-    } else {
-      StorageService.saveProducts(newProducts);
+      await ApiService.syncAll(payload);
+      alert('Berhasil mengunggah semua data lokal ke server!');
+      loadData(); 
+    } catch (e) {
+      alert(`Gagal push ke server: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
-    setProducts(newProducts);
   };
 
-  const handleUpdateCategories = async (newCats: CategoryItem[]) => {
-    if (useApi) {
-      try {
-        if (newCats.length > categories.length) {
-          const added = newCats.find(c => !categories.find(oc => oc.id === c.id));
-          if (added) await ApiService.upsertCategory(added);
-        } else if (newCats.length < categories.length) {
-          const deleted = categories.find(c => !newCats.find(nc => nc.id === c.id));
-          if (deleted) await ApiService.deleteCategory(deleted.id);
-        } else {
-          const updated = newCats.find(c => {
-             const old = categories.find(oc => oc.id === c.id);
-             return JSON.stringify(old) !== JSON.stringify(c);
-          });
-          if (updated) await ApiService.upsertCategory(updated);
-        }
-      } catch (e) { alert(`Server Error: ${e instanceof Error ? e.message : 'Gagal sinkronisasi kategori.'}`); return; }
-    } else {
-      StorageService.saveCategories(newCats);
-    }
-    setCategories(newCats);
+  const handleAddProduct = async (product: Product) => {
+    try {
+      if (useApi) await ApiService.upsertProduct(product);
+      const updated = [...products, product];
+      setProducts(updated);
+      StorageService.saveProducts(updated);
+    } catch (e) { alert(`Gagal tambah produk: ${e instanceof Error ? e.message : 'Error'}`); }
   };
 
-  const handleUpdateInventory = async (newInv: InventoryItem[]) => {
-    if (useApi) {
-      try {
-        if (newInv.length > inventory.length) {
-          const added = newInv.find(i => !inventory.find(oi => oi.id === i.id));
-          if (added) await ApiService.upsertInventory(added);
-        } else if (newInv.length < inventory.length) {
-          const deleted = inventory.find(i => !newInv.find(ni => ni.id === i.id));
-          if (deleted) await ApiService.deleteInventory(deleted.id);
-        } else {
-          const updated = newInv.find(i => {
-             const old = inventory.find(oi => oi.id === i.id);
-             return JSON.stringify(old) !== JSON.stringify(i);
-          });
-          if (updated) await ApiService.upsertInventory(updated);
-        }
-      } catch (e) { alert(`Server Error: ${e instanceof Error ? e.message : 'Gagal sinkronisasi inventori.'}`); return; }
-    } else {
-      StorageService.saveInventory(newInv);
-    }
-    setInventory(newInv);
+  const handleEditProduct = async (product: Product) => {
+    try {
+      if (useApi) await ApiService.upsertProduct(product);
+      const updated = products.map(p => p.id === product.id ? product : p);
+      setProducts(updated);
+      StorageService.saveProducts(updated);
+    } catch (e) { alert(`Gagal update produk: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    try {
+      if (useApi) await ApiService.deleteProduct(id);
+      const updated = products.filter(p => p.id !== id);
+      setProducts(updated);
+      StorageService.saveProducts(updated);
+    } catch (e) { alert(`Gagal hapus produk: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleAddCategory = async (category: CategoryItem) => {
+    try {
+      if (useApi) await ApiService.upsertCategory(category);
+      const updated = [...categories, category];
+      setCategories(updated);
+      StorageService.saveCategories(updated);
+    } catch (e) { alert(`Gagal tambah kategori: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleEditCategory = async (category: CategoryItem) => {
+    try {
+      if (useApi) await ApiService.upsertCategory(category);
+      const updated = categories.map(c => c.id === category.id ? category : c);
+      setCategories(updated);
+      StorageService.saveCategories(updated);
+    } catch (e) { alert(`Gagal update kategori: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      if (useApi) await ApiService.deleteCategory(id);
+      const updated = categories.filter(c => c.id !== id);
+      setCategories(updated);
+      StorageService.saveCategories(updated);
+    } catch (e) { alert(`Gagal hapus kategori: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleAddInventory = async (item: InventoryItem) => {
+    try {
+      if (useApi) await ApiService.upsertInventory(item);
+      const updated = [...inventory, item];
+      setInventory(updated);
+      StorageService.saveInventory(updated);
+    } catch (e) { alert(`Gagal tambah stok: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleEditInventory = async (item: InventoryItem) => {
+    try {
+      if (useApi) await ApiService.upsertInventory(item);
+      const updated = inventory.map(i => i.id === item.id ? item : i);
+      setInventory(updated);
+      StorageService.saveInventory(updated);
+    } catch (e) { alert(`Gagal update stok: ${e instanceof Error ? e.message : 'Error'}`); }
+  };
+
+  const handleDeleteInventory = async (id: string) => {
+    try {
+      if (useApi) await ApiService.deleteInventory(id);
+      const updated = inventory.filter(i => i.id !== id);
+      setInventory(updated);
+      StorageService.saveInventory(updated);
+    } catch (e) { alert(`Gagal hapus stok: ${e instanceof Error ? e.message : 'Error'}`); }
   };
 
   const handleUpdateSettings = async (newSettings: StoreSettings) => {
-    if (useApi) {
-      try {
-        await ApiService.saveSettings(newSettings);
-      } catch (e) { alert(`Server Error: ${e instanceof Error ? e.message : 'Gagal simpan pengaturan.'}`); return; }
-    } else {
+    try {
+      if (useApi) await ApiService.saveSettings(newSettings);
+      setSettings(newSettings);
       StorageService.saveSettings(newSettings);
-    }
-    setSettings(newSettings);
+    } catch (e) { alert(`Gagal simpan pengaturan: ${e instanceof Error ? e.message : 'Error'}`); }
   };
 
   const handleAddOrder = async (orderData: any) => {
     const newOrder: Order = { ...orderData, id: `ORD-${Date.now()}`, createdAt: new Date(), status: OrderStatus.PENDING };
     try {
       if (useApi) await ApiService.upsertOrder(newOrder);
-      else StorageService.saveOrder(newOrder);
+      StorageService.saveOrder(newOrder);
       setOrders(prev => [newOrder, ...prev]);
       setActiveTab('orders');
       setSelectedOrderForInvoice(newOrder);
-    } catch (e) { alert(`Gagal menyimpan pesanan: ${e instanceof Error ? e.message : 'Server Error'}`); }
+    } catch (e) { alert(`Gagal simpan pesanan: ${e instanceof Error ? e.message : 'Error'}`); }
   };
 
   const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
     try {
-      // Langsung update state lokal agar UI terasa responsif
+      const orderToUpdate = orders.find(o => o.id === id);
+      if (!orderToUpdate) return;
+
+      const updatedOrder = { ...orderToUpdate, status };
       const previousOrders = [...orders];
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+
+      // Optimistic Update
+      setOrders(prev => prev.map(o => o.id === id ? updatedOrder : o));
 
       if (useApi) {
         try {
-          await ApiService.updateOrderStatus(id, status);
+          // Kirim objek order LENGKAP agar backend tidak error saat mapping
+          await ApiService.updateOrderStatus(updatedOrder);
         } catch (serverError) {
-          // Jika gagal di server, kembalikan state lokal (Rollback)
           setOrders(previousOrders);
-          alert(`Gagal sinkron status ke server: ${serverError instanceof Error ? serverError.message : 'Silakan cek koneksi database.'}`);
+          alert(`Gagal sinkron status: ${serverError instanceof Error ? serverError.message : 'Database Error'}`);
         }
       } else {
         StorageService.updateOrderStatus(id, status);
       }
-    } catch (e) { 
-      alert("Kesalahan aplikasi saat memperbarui status."); 
-    }
+    } catch (e) { alert("Kesalahan aplikasi."); }
   };
 
   const stats = useMemo(() => {
@@ -236,12 +264,12 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
       case 'new-order': return <NewOrder products={products} customers={customers} categories={categories} onAddOrder={handleAddOrder} />;
       case 'orders': return <OrderHistory orders={orders} onUpdateStatus={handleUpdateOrderStatus} onViewInvoice={setSelectedOrderForInvoice} />;
-      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onUpdateProducts={handleUpdateProducts} />;
-      case 'categories': return <CategoryManager categories={categories} onUpdateCategories={handleUpdateCategories} />;
-      case 'inventory': return <Inventory items={inventory} onUpdateItems={handleUpdateInventory} />;
+      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onAddProduct={handleAddProduct} onEditProduct={handleEditProduct} onDeleteProduct={handleDeleteProduct} />;
+      case 'categories': return <CategoryManager categories={categories} onAddCategory={handleAddCategory} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} />;
+      case 'inventory': return <Inventory items={inventory} onAddInventory={handleAddInventory} onEditInventory={handleEditInventory} onDeleteInventory={handleDeleteInventory} />;
       case 'customers': return <Customers customers={customers.map(c => ({...c, total_orders: c.totalOrders, total_spent: c.totalSpent, email: c.email || '-'}))} />;
       case 'reports': return <Reports />;
-      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={handleUpdateSettings} onPush={() => {}} onPull={loadData} />;
+      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={handleUpdateSettings} onPush={handlePush} onPull={loadData} />;
       default: return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
     }
   };
@@ -253,7 +281,7 @@ const App: React.FC = () => {
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
            <div className="flex items-center gap-4">
              <h2 className="font-black text-slate-900 uppercase tracking-tighter text-sm">{activeTab.replace('-', ' ')}</h2>
-             <button onClick={() => setUseApi(!useApi)} className={`flex items-center gap-2 text-[10px] font-black px-4 py-2 rounded-full border transition-all ${useApi ? 'bg-indigo-600 text-white' : 'bg-amber-100 text-amber-700'}`}>
+             <button onClick={() => setUseApi(!useApi)} className={`flex items-center gap-2 text-[10px] font-black px-4 py-2 rounded-full border transition-all ${useApi ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
                <span className={`w-1.5 h-1.5 rounded-full ${useApi ? 'bg-white' : 'bg-amber-500'}`}></span>
                {useApi ? 'SERVER MODE' : 'LOCAL MODE'}
              </button>

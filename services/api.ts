@@ -8,7 +8,7 @@ const handleResponse = async (response: Response) => {
     let errorMessage = `API Error: ${response.status}`;
     try {
       const text = await response.text();
-      console.error("Server Response Text:", text); // Log response mentah untuk debugging
+      console.error("Server Response Text:", text);
       
       if (text.includes('<h1>A Database Error Occurred</h1>')) {
         const match = text.match(/<p>Error Number: (.*?)<\/p><p>(.*?)<\/p>/);
@@ -21,9 +21,7 @@ const handleResponse = async (response: Response) => {
           errorMessage = text.substring(0, 100) || errorMessage;
         }
       }
-    } catch (e) {
-      console.error("Error parsing error response:", e);
-    }
+    } catch (e) {}
     throw new Error(errorMessage);
   }
   return response.json();
@@ -60,7 +58,6 @@ const mapProduct = (p: any): Product => ({
 });
 
 export const ApiService = {
-  // GETTERS
   getOrders: async (): Promise<Order[]> => {
     const data = await handleResponse(await fetch(`${API_BASE_URL}/orders`));
     return Array.isArray(data) ? data.map(mapOrder) : [];
@@ -74,17 +71,17 @@ export const ApiService = {
   getCustomers: async () => handleResponse(await fetch(`${API_BASE_URL}/customers`)),
   getSettings: async () => handleResponse(await fetch(`${API_BASE_URL}/settings`)),
 
-  // SAVE / UPDATE (UPSERT)
+  // Menyesuaikan dengan backend: kirim sebagai array di dalam key 'orders'
   upsertOrder: async (order: Order) => handleResponse(await fetch(`${API_BASE_URL}/orders`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order)
-  })),
-  
-  // Perbaikan: Menggunakan POST untuk update status (lebih kompatibel dengan server PHP)
-  updateOrderStatus: async (id: string, status: OrderStatus) => handleResponse(await fetch(`${API_BASE_URL}/update_status`, {
     method: 'POST', 
     headers: { 'Content-Type': 'application/json' }, 
-    body: JSON.stringify({ id, status })
+    body: JSON.stringify({ orders: [order] })
   })),
+  
+  // Sekarang menerima objek Order lengkap
+  updateOrderStatus: async (order: Order) => {
+    return ApiService.upsertOrder(order);
+  },
 
   upsertProduct: async (product: Product) => handleResponse(await fetch(`${API_BASE_URL}/products`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product)
@@ -102,12 +99,10 @@ export const ApiService = {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings)
   })),
 
-  // DELETE
   deleteProduct: async (id: string) => fetch(`${API_BASE_URL}/products/${id}`, { method: 'DELETE' }),
   deleteCategory: async (id: string) => fetch(`${API_BASE_URL}/categories/${id}`, { method: 'DELETE' }),
   deleteInventory: async (id: string) => fetch(`${API_BASE_URL}/inventory/${id}`, { method: 'DELETE' }),
 
-  // BULK SYNC
   syncAll: async (payload: any) => handleResponse(await fetch(`${API_BASE_URL}/sync`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }))

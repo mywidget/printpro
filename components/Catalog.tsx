@@ -6,10 +6,12 @@ interface CatalogProps {
   products: Product[];
   inventory: InventoryItem[];
   categories: CategoryItem[];
-  onUpdateProducts: (products: Product[]) => void;
+  onAddProduct: (product: Product) => void;
+  onEditProduct: (product: Product) => void;
+  onDeleteProduct: (id: string) => void;
 }
 
-const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], categories = [], onUpdateProducts }) => {
+const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], categories = [], onAddProduct, onEditProduct, onDeleteProduct }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<Partial<Product>>({ 
@@ -51,15 +53,17 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingProduct) {
-      onUpdateProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...formData } as Product : p));
+      onEditProduct({ ...editingProduct, ...formData } as Product);
     } else {
-      const newProduct: Product = {
-        ...formData as Product,
-        id: `prod-${Date.now()}`,
-      };
-      onUpdateProducts([...products, newProduct]);
+      onAddProduct({ ...formData, id: `prod-${Date.now()}` } as Product);
     }
     closeModal();
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Hapus produk ini dari katalog?')) {
+      onDeleteProduct(id);
+    }
   };
 
   const addMaterialLink = () => {
@@ -128,10 +132,9 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
             </thead>
             <tbody className="divide-y divide-slate-100">
               {products.map(product => (
-                <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={product.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
                     <p className="text-sm font-bold text-slate-900">{product.name || 'Produk Tanpa Nama'}</p>
-                    {/* Fix: use dynamic category name */}
                     <p className="text-[10px] text-slate-400">{categories.find(c => c.id === product.categoryId)?.name || 'Tanpa Kategori'}</p>
                   </td>
                   <td className="px-6 py-4 text-center">
@@ -151,7 +154,10 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button onClick={() => openModal(product)} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">Edit</button>
+                    <div className="flex justify-end gap-2">
+                       <button onClick={() => openModal(product)} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">Edit</button>
+                       <button onClick={() => handleDelete(product.id)} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all">Hapus</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -180,7 +186,6 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
             
             <form onSubmit={handleSave} id="catalog-form" className="flex-1 overflow-y-auto p-8 no-scrollbar">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                {/* Section 1: Dasar */}
                 <div className="space-y-6">
                   <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Informasi Produk</h4>
                   <div className="space-y-4">
@@ -201,7 +206,6 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Kategori & Logika</label>
                         <div className="flex gap-2">
-                           {/* Fix: use categoryId and dynamic categories */}
                            <select className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm" value={formData.categoryId || ''} onChange={e => setFormData({...formData, categoryId: e.target.value})}>
                               {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                            </select>
@@ -214,7 +218,6 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                   </div>
                 </div>
 
-                {/* Section 2: Bahan Baku & Recovery */}
                 <div className="space-y-6">
                   <div className="flex justify-between items-center border-b border-emerald-50 pb-2">
                     <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Bahan Baku & Retur</h4>
@@ -243,7 +246,6 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                   </div>
                 </div>
 
-                {/* Section 3: Grosir */}
                 <div className="space-y-6">
                   <div className="flex justify-between items-center border-b border-amber-50 pb-2">
                     <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Harga Grosir</h4>

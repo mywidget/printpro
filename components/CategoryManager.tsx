@@ -4,10 +4,12 @@ import { CategoryItem } from '../types';
 
 interface CategoryManagerProps {
   categories: CategoryItem[];
-  onUpdateCategories: (categories: CategoryItem[]) => void;
+  onAddCategory: (category: CategoryItem) => void;
+  onEditCategory: (category: CategoryItem) => void;
+  onDeleteCategory: (id: string) => void;
 }
 
-const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, onUpdateCategories }) => {
+const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, onAddCategory, onEditCategory, onDeleteCategory }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [formData, setFormData] = useState<Partial<CategoryItem>>({ name: '', description: '' });
@@ -26,21 +28,16 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, onUpdateC
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingCategory) {
-      onUpdateCategories(categories.map(c => c.id === editingCategory.id ? { ...c, ...formData } as CategoryItem : c));
+      onEditCategory({ ...editingCategory, ...formData } as CategoryItem);
     } else {
-      const newCat: CategoryItem = {
-        id: `cat-${Date.now()}`,
-        name: formData.name || '',
-        description: formData.description || '',
-      };
-      onUpdateCategories([...categories, newCat]);
+      onAddCategory({ ...formData, id: `cat-${Date.now()}` } as CategoryItem);
     }
     setIsModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
     if (confirm('Hapus kategori ini? Produk dengan kategori ini mungkin perlu diupdate.')) {
-      onUpdateCategories(categories.filter(c => c.id !== id));
+      onDeleteCategory(id);
     }
   };
 
@@ -69,6 +66,9 @@ const CategoryManager: React.FC<CategoryManagerProps> = ({ categories, onUpdateC
             </div>
           </div>
         ))}
+        {categories.length === 0 && (
+          <div className="col-span-full py-20 text-center text-slate-400 font-bold italic">Belum ada kategori.</div>
+        )}
       </div>
 
       {isModalOpen && (

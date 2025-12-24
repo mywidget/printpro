@@ -4,10 +4,12 @@ import { InventoryItem } from '../types';
 
 interface InventoryProps {
   items: InventoryItem[];
-  onUpdateItems: (items: InventoryItem[]) => void;
+  onAddInventory: (item: InventoryItem) => void;
+  onEditInventory: (item: InventoryItem) => void;
+  onDeleteInventory: (id: string) => void;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ items, onUpdateItems }) => {
+const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInventory, onDeleteInventory }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'restock'>('add');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -36,26 +38,18 @@ const Inventory: React.FC<InventoryProps> = ({ items, onUpdateItems }) => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (modalMode === 'add') {
-      const newItem: InventoryItem = {
-        ...formData as InventoryItem,
-        id: `inv-${Date.now()}`,
-      };
-      onUpdateItems([...items, newItem]);
+      onAddInventory({ ...formData, id: `inv-${Date.now()}` } as InventoryItem);
     } else if (modalMode === 'edit' && selectedItem) {
-      onUpdateItems(items.map(item => item.id === selectedItem.id ? { ...item, ...formData } as InventoryItem : item));
+      onEditInventory({ ...selectedItem, ...formData } as InventoryItem);
     } else if (modalMode === 'restock' && selectedItem) {
-      onUpdateItems(items.map(item => 
-        item.id === selectedItem.id 
-          ? { ...item, stock: item.stock + restockAmount } 
-          : item
-      ));
+      onEditInventory({ ...selectedItem, stock: selectedItem.stock + restockAmount });
     }
     closeModal();
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this material?')) {
-      onUpdateItems(items.filter(item => item.id !== id));
+    if (window.confirm('Hapus material ini dari database?')) {
+      onDeleteInventory(id);
     }
   };
 
@@ -125,6 +119,9 @@ const Inventory: React.FC<InventoryProps> = ({ items, onUpdateItems }) => {
             )}
           </div>
         ))}
+        {items.length === 0 && (
+          <div className="col-span-full py-20 text-center text-slate-400 font-bold italic">Inventori kosong.</div>
+        )}
       </div>
 
       {isModalOpen && (
