@@ -1,6 +1,6 @@
 
 import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, PricingType, CategoryItem, User, UserRole } from '../types';
-import { PRODUCTS } from '../constants';
+import { PRODUCTS, INITIAL_INVENTORY } from '../constants';
 
 const KEYS = {
   ORDERS: 'printpro_orders',
@@ -104,7 +104,16 @@ export const StorageService = {
     const orders = StorageService.getOrders();
     const idx = orders.findIndex(o => o.id === orderId);
     if (idx !== -1) {
+      const oldStatus = orders[idx].status;
       orders[idx].status = newStatus;
+      
+      // Logika otomatis untuk retur stok jika status berubah menjadi CANCELLED atau RETURNED
+      if (newStatus === OrderStatus.CANCELLED) {
+        StorageService.adjustStockForOrder(orders[idx], 'restore_full');
+      } else if (newStatus === OrderStatus.RETURNED) {
+        StorageService.adjustStockForOrder(orders[idx], 'restore_recoverable');
+      }
+      
       localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
     }
     return orders;
@@ -121,7 +130,7 @@ export const StorageService = {
 
   getInventory: (): InventoryItem[] => {
     const data = localStorage.getItem(KEYS.INVENTORY);
-    return data ? JSON.parse(data) : [];
+    return data ? JSON.parse(data) : INITIAL_INVENTORY;
   },
 
   saveInventory: (items: InventoryItem[]) => {
@@ -146,7 +155,6 @@ export const StorageService = {
     const phone = (order.customerPhone || '').trim();
     const name = (order.customerName || '').trim();
     
-    // Cari pelanggan berdasarkan nomor telepon (prioritas) atau nama jika telepon kosong
     let existingIdx = -1;
     if (phone) {
       existingIdx = customers.findIndex(c => (c.phone || '').trim() === phone);
@@ -155,15 +163,12 @@ export const StorageService = {
     }
 
     if (existingIdx >= 0) {
-      // Pelanggan Lama: Update statistik
       customers[existingIdx].totalOrders += 1;
       customers[existingIdx].totalSpent += Number(order.totalAmount || 0);
-      // Jika nama berubah di order tapi telepon sama, anggap update nama
       if (name && customers[existingIdx].name !== name) {
         customers[existingIdx].name = name;
       }
     } else {
-      // Pelanggan Baru: Tambahkan ke list
       customers.push({
         id: `cust-${Date.now()}`,
         name: name,
