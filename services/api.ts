@@ -1,101 +1,104 @@
 
 import { Order, Product, InventoryItem, Customer, StoreSettings, OrderStatus, CategoryItem } from '../types';
 
-const API_BASE_URL = 'http://localhost/percetakan/api'; 
+const API_BASE_URL = 'httpa://printpro.go/api'; 
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `API Error: ${response.status}`);
+    let errorMessage = `API Error: ${response.status}`;
+    try {
+      const text = await response.text();
+      if (text.includes('<h1>A Database Error Occurred</h1>')) {
+        const match = text.match(/<p>Error Number: (.*?)<\/p><p>(.*?)<\/p>/);
+        errorMessage = match ? `Database Error [${match[1]}]: ${match[2]}` : "Kesalahan Database Server.";
+      } else {
+        const errorData = JSON.parse(text);
+        errorMessage = errorData.message || errorMessage;
+      }
+    } catch (e) {}
+    throw new Error(errorMessage);
   }
   return response.json();
 };
 
+const mapOrder = (o: any): Order => {
+  let items = [];
+  try {
+    // Menangani jika items datang sebagai string JSON dari database
+    items = typeof o.items === 'string' ? JSON.parse(o.items) : (o.items || o.items_json || []);
+  } catch (e) {
+    console.error("Failed to parse order items for order:", o.id);
+  }
+
+  return {
+    ...o,
+    id: String(o.id),
+    createdAt: new Date(o.created_at || o.createdAt),
+    totalAmount: Number(o.total_amount || o.totalAmount || 0),
+    paidAmount: Number(o.paid_amount || o.paidAmount || 0),
+    items: Array.isArray(items) ? items : []
+  };
+};
+
 const mapProduct = (p: any): Product => ({
   ...p,
-  id: String(p.id || p.product_id),
-  name: p.name || p.product_name,
+  id: String(p.id),
+  name: p.name,
   categoryId: p.category_id || p.categoryId,
   basePrice: Number(p.basePrice || p.base_price || 0),
   costPrice: Number(p.costPrice || p.cost_price || 0),
   pricingType: p.pricing_type || p.pricingType,
-  priceRanges: (p.price_ranges || p.priceRanges || []).map((r: any) => ({
-    min: Number(r.min),
-    price: Number(r.price)
-  }))
+  priceRanges: typeof p.price_ranges === 'string' ? JSON.parse(p.price_ranges) : (p.priceRanges || []),
+  materials: typeof p.materials === 'string' ? JSON.parse(p.materials) : (p.materials || [])
 });
 
 export const ApiService = {
-  getOrders: async (startDate?: string, endDate?: string): Promise<Order[]> => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('start', startDate);
-    if (endDate) params.append('end', endDate);
-    
-    const res = await fetch(`${API_BASE_URL}/orders?${params.toString()}`);
-    const data = await handleResponse(res);
-    return Array.isArray(data) ? data.map(o => ({
-      ...o,
-      id: String(o.id),
-      createdAt: new Date(o.created_at || o.createdAt),
-      totalAmount: Number(o.total_amount || o.totalAmount),
-      paidAmount: Number(o.paid_amount || o.paidAmount)
-    })) : [];
+  // GETTERS
+  getOrders: async (): Promise<Order[]> => {
+    const data = await handleResponse(await fetch(`${API_BASE_URL}/orders`));
+    return Array.isArray(data) ? data.map(mapOrder) : [];
   },
-
-  createOrder: async (order: Partial<Order>): Promise<Order> => {
-    const res = await fetch(`${API_BASE_URL}/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(order)
-    });
-    return handleResponse(res);
-  },
-
-  updateOrderStatus: async (id: string, status: OrderStatus): Promise<boolean> => {
-    const res = await fetch(`${API_BASE_URL}/orders/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-    return res.ok;
-  },
-
-  getProducts: async (): Promise<Product[]> => {
-    const res = await fetch(`${API_BASE_URL}/products`);
-    const data = await handleResponse(res);
+  getProducts: async () => {
+    const data = await handleResponse(await fetch(`${API_BASE_URL}/products`));
     return Array.isArray(data) ? data.map(mapProduct) : [];
   },
+  getInventory: async () => handleResponse(await fetch(`${API_BASE_URL}/inventory`)),
+  getCategories: async () => handleResponse(await fetch(`${API_BASE_URL}/categories`)),
+  getCustomers: async () => handleResponse(await fetch(`${API_BASE_URL}/customers`)),
+  getSettings: async () => handleResponse(await fetch(`${API_BASE_URL}/settings`)),
 
-  getInventory: async (): Promise<InventoryItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/inventory`);
-    const data = await handleResponse(res);
-    return Array.isArray(data) ? data.map((i: any) => ({
-      ...i,
-      id: String(i.id),
-      stock: Number(i.stock),
-      minStock: Number(i.min_stock !== undefined ? i.min_stock : (i.minStock || 0))
-    })) : [];
-  },
+  // SAVE / UPDATE (UPSERT)
+  upsertOrder: async (order: Order) => handleResponse(await fetch(`${API_BASE_URL}/orders`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(order)
+  })),
+  
+  updateOrderStatus: async (id: string, status: OrderStatus) => handleResponse(await fetch(`${API_BASE_URL}/orders/${id}/status`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
+  })),
 
-  getCategories: async (): Promise<CategoryItem[]> => {
-    const res = await fetch(`${API_BASE_URL}/categories`);
-    const data = await handleResponse(res);
-    return Array.isArray(data) ? data.map((c: any) => ({ ...c, id: String(c.id) })) : [];
-  },
+  upsertProduct: async (product: Product) => handleResponse(await fetch(`${API_BASE_URL}/products`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product)
+  })),
 
-  getCustomers: async (): Promise<Customer[]> => {
-    const res = await fetch(`${API_BASE_URL}/customers`);
-    const data = await handleResponse(res);
-    return Array.isArray(data) ? data.map((c: any) => ({
-      ...c,
-      id: String(c.id),
-      totalOrders: Number(c.total_orders || 0),
-      totalSpent: Number(c.total_spent || 0)
-    })) : [];
-  },
+  upsertCategory: async (category: CategoryItem) => handleResponse(await fetch(`${API_BASE_URL}/categories`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(category)
+  })),
 
-  getSettings: async (): Promise<StoreSettings> => {
-    const res = await fetch(`${API_BASE_URL}/settings`);
-    return handleResponse(res);
-  }
+  upsertInventory: async (item: InventoryItem) => handleResponse(await fetch(`${API_BASE_URL}/inventory`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item)
+  })),
+
+  saveSettings: async (settings: StoreSettings) => handleResponse(await fetch(`${API_BASE_URL}/settings`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings)
+  })),
+
+  // DELETE
+  deleteProduct: async (id: string) => fetch(`${API_BASE_URL}/products/${id}`, { method: 'DELETE' }),
+  deleteCategory: async (id: string) => fetch(`${API_BASE_URL}/categories/${id}`, { method: 'DELETE' }),
+  deleteInventory: async (id: string) => fetch(`${API_BASE_URL}/inventory/${id}`, { method: 'DELETE' }),
+
+  // BULK SYNC
+  syncAll: async (payload: any) => handleResponse(await fetch(`${API_BASE_URL}/sync`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  }))
 };

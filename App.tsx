@@ -40,14 +40,18 @@ const App: React.FC = () => {
   const [categories, setCategories] = useState<CategoryItem[]>(DEFAULT_CATEGORIES);
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
 
   const [useApi, setUseApi] = useState(() => {
-    return localStorage.getItem('printpro_use_api') === 'true';
+    const savedMode = localStorage.getItem('printpro_use_api');
+    return savedMode === 'true';
   });
 
   const loadData = async () => {
     setIsLoading(true);
+    setApiError(null);
     try {
       if (useApi) {
         const [prods, inv, ords, custs, sett, cats] = await Promise.all([
@@ -63,7 +67,7 @@ const App: React.FC = () => {
         setOrders(ords);
         setCustomers(custs);
         setSettings(sett || DEFAULT_SETTINGS);
-        if (cats.length > 0) setCategories(cats);
+        if (cats && cats.length > 0) setCategories(cats);
       } else {
         setProducts(StorageService.getProducts());
         setInventory(StorageService.getInventory());
@@ -74,6 +78,9 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error("Load Error:", err);
+      if (useApi) {
+        setApiError(err instanceof Error ? err.message : 'Koneksi ke server gagal (Error 500)');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -84,6 +91,60 @@ const App: React.FC = () => {
     loadData();
   }, [useApi]);
 
+  const handlePushToDatabase = async () => {
+    setIsSyncing(true);
+    try {
+      const payload = {
+        categories: StorageService.getCategories(DEFAULT_CATEGORIES),
+        products: StorageService.getProducts(),
+        inventory: StorageService.getInventory(),
+        orders: StorageService.getOrders(),
+        customers: StorageService.getCustomers(),
+        settings: StorageService.getSettings(DEFAULT_SETTINGS) // Menyertakan settings dalam payload
+      };
+      await ApiService.syncAll(payload);
+      alert('SINKRONISASI BERHASIL: Seluruh data lokal Anda kini tersimpan aman di database server.');
+    } catch (err) {
+      alert('SINKRONISASI GAGAL: ' + (err instanceof Error ? err.message : 'Internal Server Error (500)'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handlePullFromDatabase = async () => {
+    setIsSyncing(true);
+    try {
+      const [prods, inv, ords, custs, sett, cats] = await Promise.all([
+        ApiService.getProducts(),
+        ApiService.getInventory(),
+        ApiService.getOrders(),
+        ApiService.getCustomers(),
+        ApiService.getSettings(),
+        ApiService.getCategories()
+      ]);
+
+      StorageService.saveProducts(prods);
+      StorageService.saveInventory(inv);
+      localStorage.setItem('printpro_orders', JSON.stringify(ords));
+      localStorage.setItem('printpro_customers', JSON.stringify(custs));
+      StorageService.saveSettings(sett || DEFAULT_SETTINGS);
+      StorageService.saveCategories(cats || DEFAULT_CATEGORIES);
+
+      setProducts(prods);
+      setInventory(inv);
+      setOrders(ords);
+      setCustomers(custs);
+      setSettings(sett || DEFAULT_SETTINGS);
+      setCategories(cats || DEFAULT_CATEGORIES);
+
+      alert('UNDUH BERHASIL: Data lokal Anda kini sinkron dengan versi terbaru dari server.');
+    } catch (err) {
+      alert('UNDUH GAGAL: ' + (err instanceof Error ? err.message : 'Internal Server Error (500)'));
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleAddOrder = async (orderData: any) => {
     const newOrder: Order = {
       ...orderData,
@@ -92,26 +153,31 @@ const App: React.FC = () => {
       status: OrderStatus.PENDING
     };
 
-    if (useApi) {
-      await ApiService.createOrder(newOrder);
-    } else {
-      StorageService.saveOrder(newOrder);
+    try {
+      if (useApi) {
+        await ApiService.createOrder(newOrder);
+      } else {
+        StorageService.saveOrder(newOrder);
+      }
+      setOrders(prev => [newOrder, ...prev]);
+      setActiveTab('orders');
+      setSelectedOrderForInvoice(newOrder);
+    } catch (err) {
+      alert("Gagal menyimpan ke server. Pesanan tetap tersimpan sementara di memori, silakan coba lagi.");
     }
-    
-    setOrders([newOrder, ...orders]);
-    setActiveTab('orders'); // Pindah ke riwayat setelah pesan
-    setSelectedOrderForInvoice(newOrder);
   };
 
   const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
-    if (useApi) {
-      await ApiService.updateOrderStatus(id, status);
-    }
-    
-    const updated = orders.map(o => o.id === id ? { ...o, status } : o);
-    setOrders(updated);
-    if (!useApi) {
-      StorageService.updateOrderStatus(id, status);
+    try {
+      if (useApi) {
+        await ApiService.updateOrderStatus(id, status);
+      }
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+      if (!useApi) {
+        StorageService.updateOrderStatus(id, status);
+      }
+    } catch (err) {
+      alert("Gagal memperbarui status di server.");
     }
   };
 
@@ -128,19 +194,33 @@ const App: React.FC = () => {
       d.setDate(d.getDate() - i);
       const dayString = d.toDateString();
       const amount = activeOrders.filter(o => new Date(o.createdAt).toDateString() === dayString).reduce((sum, o) => sum + o.totalAmount, 0);
-      revenueByDay.push({ 
-        date: d.toLocaleDateString('id-ID', { weekday: 'short' }), 
-        amount 
-      });
+      revenueByDay.push({ date: d.toLocaleDateString('id-ID', { weekday: 'short' }), amount });
     }
     return { totalSales, pendingOrders, completedToday, revenueByDay };
   }, [orders]);
 
   const renderContent = () => {
-    if (isLoading) return (
+    if (apiError) return (
+      <div className="flex flex-col items-center justify-center h-[70vh] px-8 text-center">
+        <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center text-3xl mb-6 animate-bounce">⚠️</div>
+        <h3 className="text-xl font-black text-slate-900 mb-2">Koneksi Database Terputus</h3>
+        <p className="text-sm text-slate-500 max-w-md mb-8">
+          Aplikasi tidak dapat terhubung ke server. Pastikan backend Anda sudah memiliki <strong>method sync</strong> dan database aktif.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <button onClick={() => loadData()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:bg-indigo-700 transition-all">Coba Lagi</button>
+          <button onClick={() => setUseApi(false)} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 transition-all">Gunakan Mode Lokal</button>
+        </div>
+      </div>
+    );
+
+    if (isLoading || isSyncing) return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="font-bold text-slate-400">Loading data...</p>
+        <div className="text-center">
+           <p className="font-black text-slate-900 text-sm uppercase tracking-widest">{isSyncing ? 'Sinkronisasi Cloud' : 'Sinkronisasi Data'}</p>
+           <p className="text-[10px] text-slate-400 font-bold mt-1">Harap tunggu sebentar...</p>
+        </div>
       </div>
     );
     
@@ -148,12 +228,12 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
       case 'new-order': return <NewOrder products={products} customers={customers} categories={categories} onAddOrder={handleAddOrder} />;
       case 'orders': return <OrderHistory orders={orders} onUpdateStatus={handleUpdateOrderStatus} onViewInvoice={setSelectedOrderForInvoice} />;
-      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onUpdateProducts={(p) => { setProducts(p); StorageService.saveProducts(p); }} />;
-      case 'categories': return <CategoryManager categories={categories} onUpdateCategories={(c) => { setCategories(c); StorageService.saveCategories(c); }} />;
-      case 'inventory': return <Inventory items={inventory} onUpdateItems={(i) => { setInventory(i); StorageService.saveInventory(i); }} />;
+      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onUpdateProducts={(p) => { setProducts(p); if(!useApi) StorageService.saveProducts(p); }} />;
+      case 'categories': return <CategoryManager categories={categories} onUpdateCategories={(c) => { setCategories(c); if(!useApi) StorageService.saveCategories(c); }} />;
+      case 'inventory': return <Inventory items={inventory} onUpdateItems={(i) => { setInventory(i); if(!useApi) StorageService.saveInventory(i); }} />;
       case 'customers': return <Customers customers={customers.map(c => ({...c, total_orders: c.totalOrders, total_spent: c.totalSpent, email: c.email || '-'}))} />;
       case 'reports': return <Reports />;
-      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={(s) => { setSettings(s); StorageService.saveSettings(s); }} />;
+      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={(s) => { setSettings(s); if(!useApi) StorageService.saveSettings(s); }} onPush={handlePushToDatabase} onPull={handlePullFromDatabase} />;
       default: return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
     }
   };
@@ -164,16 +244,28 @@ const App: React.FC = () => {
       <main className="flex-1 lg:ml-64 min-h-screen pb-20 lg:pb-0">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
            <div className="flex items-center gap-4">
-             <h2 className="font-bold text-slate-800 uppercase tracking-tight">{activeTab}</h2>
+             <h2 className="font-black text-slate-900 uppercase tracking-tighter text-sm">{activeTab.replace('-', ' ')}</h2>
              <button 
                 onClick={() => setUseApi(!useApi)}
-                className={`flex items-center gap-2 text-[10px] font-black px-3 py-1.5 rounded-full border transition-all ${useApi ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-amber-50 text-amber-600 border-amber-200'}`}
+                className={`flex items-center gap-2 text-[10px] font-black px-4 py-2 rounded-full border transition-all duration-300 transform active:scale-95 ${useApi ? 'bg-indigo-600 text-white border-indigo-700 shadow-lg shadow-indigo-100' : 'bg-amber-100 text-amber-700 border-amber-200'}`}
              >
-               <span className="w-2 h-2 rounded-full animate-pulse bg-current"></span>
+               <span className={`w-1.5 h-1.5 rounded-full ${useApi ? 'bg-white animate-pulse' : 'bg-amber-500'}`}></span>
                {useApi ? 'SERVER MODE' : 'LOCAL MODE'}
              </button>
            </div>
-           <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs text-white font-bold uppercase">ADMIN</div>
+           
+           <div className="flex items-center gap-3">
+             {useApi && !apiError && (
+                <button onClick={handlePullFromDatabase} title="Ambil data terbaru dari server" className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">🔄</button>
+             )}
+             <div className="text-right hidden sm:block">
+               <p className="text-[10px] font-black text-slate-900 leading-none uppercase tracking-tighter">Administrator</p>
+               <p className={`text-[8px] font-bold mt-1 uppercase tracking-widest ${apiError ? 'text-red-500' : 'text-slate-400'}`}>
+                  {apiError ? 'Connection Error' : (useApi ? 'Server Active' : 'LocalStorage')}
+               </p>
+             </div>
+             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-xs text-white font-black shadow-lg shadow-indigo-100">PR</div>
+           </div>
         </header>
         {renderContent()}
       </main>

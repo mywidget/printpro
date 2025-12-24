@@ -61,7 +61,7 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ orders, onUpdateStatus, onV
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-bold text-slate-800">{order.customerName}</p>
-                    <p className="text-[10px] text-slate-400">{order.items.length} Item</p>
+                    <p className="text-[10px] text-slate-400">{(order.items || []).length} Item</p>
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-sm font-black text-slate-900">Rp {order.totalAmount.toLocaleString()}</p>

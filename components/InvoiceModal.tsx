@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Order, StoreSettings, PricingType } from '../types';
+import { Order, StoreSettings } from '../types';
 
 interface InvoiceModalProps {
   order: Order;
@@ -14,6 +14,8 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
   const handlePrint = () => {
     window.print();
   };
+
+  const items = order.items || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:p-0 print:bg-white overflow-y-auto">
@@ -76,9 +78,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
             </div>
             <div className={printMode === 'thermal' ? 'border-b border-dashed border-slate-300 pb-4' : 'text-right'}>
               <h4 className="text-[9px] font-bold text-slate-400 uppercase mb-1">Pembayaran:</h4>
-              <p className="font-bold text-indigo-600 uppercase">{order.paymentMethod.replace('_', ' ')}</p>
+              <p className="font-bold text-indigo-600 uppercase">{order.paymentMethod?.replace('_', ' ') || 'CASH'}</p>
               <p className="text-[11px] text-slate-500">
-                {order.paidAmount >= order.totalAmount ? 'LUNAS' : 'BELUM LUNAS'}
+                {(order.paidAmount || 0) >= (order.totalAmount || 0) ? 'LUNAS' : 'BELUM LUNAS'}
               </p>
             </div>
           </div>
@@ -97,7 +99,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {order.items.map((item, idx) => (
+                  {items.map((item, idx) => (
                     <tr key={idx} className="text-sm">
                       <td className="py-4">
                         <p className="font-bold text-slate-800">{item.productName}</p>
@@ -106,29 +108,33 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
                         {item.width && item.height ? `${item.width}m x ${item.height}m` : '-'}
                       </td>
                       <td className="py-4 text-center text-slate-500">{item.quantity}</td>
-                      <td className="py-4 text-right text-slate-500">Rp {item.unitPrice.toLocaleString()}</td>
-                      <td className="py-4 text-right font-black text-slate-900">Rp {item.totalPrice.toLocaleString()}</td>
+                      <td className="py-4 text-right text-slate-500">Rp {(item.unitPrice || 0).toLocaleString()}</td>
+                      <td className="py-4 text-right font-black text-slate-900">Rp {(item.totalPrice || 0).toLocaleString()}</td>
                     </tr>
                   ))}
+                  {items.length === 0 && (
+                    <tr><td colSpan={5} className="py-10 text-center text-slate-400 italic">Tidak ada item</td></tr>
+                  )}
                 </tbody>
               </table>
             ) : (
               /* Thermal List View */
               <div className="space-y-3 border-b border-dashed border-slate-300 pb-4">
-                {order.items.map((item, idx) => (
+                {items.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
                     <div className="flex justify-between font-bold">
                       <span>{item.productName}</span>
-                      <span>Rp {item.totalPrice.toLocaleString()}</span>
+                      <span>Rp {(item.totalPrice || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-500">
                       <span>
-                        {item.quantity} x {item.unitPrice.toLocaleString()} 
+                        {item.quantity} x {(item.unitPrice || 0).toLocaleString()} 
                         {item.width && item.height ? ` (${item.width}x${item.height}m)` : ''}
                       </span>
                     </div>
                   </div>
                 ))}
+                {items.length === 0 && <p className="text-center text-slate-400 italic py-4">Tidak ada item</p>}
               </div>
             )}
           </div>
@@ -138,13 +144,13 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
             {printMode === 'thermal' && (
                <div className="flex justify-between py-1 text-slate-600">
                  <span>Subtotal</span>
-                 <span>Rp {order.totalAmount.toLocaleString()}</span>
+                 <span>Rp {(order.totalAmount || 0).toLocaleString()}</span>
                </div>
             )}
             <div className={`${printMode === 'thermal' ? 'border-t border-dashed border-slate-300 pt-2 flex justify-between' : 'w-64 border-t border-indigo-100 pt-4 flex justify-between'} items-center`}>
               <span className={`font-black text-slate-900 ${printMode === 'thermal' ? 'text-sm' : 'text-lg'}`}>TOTAL</span>
               <span className={`font-black text-indigo-600 ${printMode === 'thermal' ? 'text-sm' : 'text-2xl'}`}>
-                Rp {order.totalAmount.toLocaleString()}
+                Rp {(order.totalAmount || 0).toLocaleString()}
               </span>
             </div>
           </div>

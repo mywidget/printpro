@@ -3,7 +3,6 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DashboardStats, Order, OrderStatus } from '../types';
 import { STATUS_COLORS } from '../constants';
-import { StorageService } from '../services/storage';
 
 interface DashboardProps {
   stats: DashboardStats;
@@ -51,7 +50,9 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, recentOrders, onUpdateStat
                 <div className="flex items-center justify-between mb-2">
                   <div className="min-w-0 pr-2">
                     <p className="font-bold text-xs truncate text-slate-800">{order.customerName}</p>
-                    <p className="text-[10px] text-slate-500 truncate">{order.items[0]?.productName} x {order.items[0]?.quantity}</p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {order.items?.[0]?.productName || 'No items'} {order.items?.[0] ? `x ${order.items[0].quantity}` : ''}
+                    </p>
                   </div>
                   <p className="text-[9px] font-mono font-bold text-indigo-400">#{order.id.slice(-4)}</p>
                 </div>
