@@ -1,7 +1,7 @@
 
 import { Order, Product, InventoryItem, Customer, StoreSettings, OrderStatus, CategoryItem } from '../types';
 
-const API_BASE_URL = 'https://codeigniter.go/api'; 
+const API_BASE_URL = 'http://localhost/percetakan/api'; 
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {

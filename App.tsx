@@ -43,7 +43,7 @@ const App: React.FC = () => {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
 
   const [useApi, setUseApi] = useState(() => {
-    return localStorage.getItem('printpro_use_api') === 'false';
+    return localStorage.getItem('printpro_use_api') === 'true';
   });
 
   const loadData = async () => {
