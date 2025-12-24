@@ -1,29 +1,22 @@
-import path from 'path';
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// https://vitejs.dev/config/
 export default defineConfig({
+  plugins: [react()],
   server: {
     port: 3000,
-    host: '0.0.0.0',
-  },
-  plugins: [react()],
-  define: {
-    // Untuk environment variables di Vercel
-    'process.env': {}
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'https://apiprintpro.go',
+        changeOrigin: true,
+      }
     }
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: undefined,
-      },
-    },
-  },
+    sourcemap: true
+  }
 });
