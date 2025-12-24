@@ -23,8 +23,22 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | a PHP script and you can easily do that on your own.
 |
 */
-$config['base_url'] = '';
-
+	$is_https = false;
+	
+	if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] == 1)) {
+		$is_https = true;
+	} elseif (
+    isset($_SERVER['HTTP_X_FORWARDED_PROTO']) &&
+    strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https'
+	) {
+		$is_https = true;
+	}
+	
+	$base_url = ($is_https ? "https" : "http");
+	$base_url .= "://" . $_SERVER['HTTP_HOST'];
+	$base_url .= str_replace(basename($_SERVER['SCRIPT_NAME']), "", $_SERVER['SCRIPT_NAME']);
+	
+	$config['base_url'] = $base_url;
 /*
 |--------------------------------------------------------------------------
 | Index File
