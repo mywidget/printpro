@@ -17,9 +17,9 @@ interface CustomersProps {
 const Customers: React.FC<CustomersProps> = ({ customers }) => {
   const [search, setSearch] = useState('');
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.phone.includes(search)
+  const filteredCustomers = (customers || []).filter(c => 
+    (c.name || '').toLowerCase().includes(search.toLowerCase()) || 
+    (c.phone || '').includes(search)
   );
 
   return (
@@ -53,27 +53,34 @@ const Customers: React.FC<CustomersProps> = ({ customers }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredCustomers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-bold text-slate-900">{customer.name}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">{customer.phone} • {customer.email}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-slate-700">{customer.total_orders}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm font-black text-indigo-600">Rp {Number(customer.total_spent).toLocaleString()}</p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-1">
-                      {[...Array(Math.min(5, Math.ceil(customer.total_orders / 2)))].map((_, i) => (
-                        <span key={i} className="text-[10px]">⭐</span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredCustomers.map((customer) => {
+                // Defensive check for star count to prevent RangeError
+                const rawOrders = Number(customer.total_orders);
+                const starCount = isNaN(rawOrders) ? 0 : Math.max(0, Math.min(5, Math.ceil(rawOrders / 2)));
+                
+                return (
+                  <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-bold text-slate-900">{customer.name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{customer.phone} • {customer.email}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-bold text-slate-700">{customer.total_orders}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-black text-indigo-600">Rp {Number(customer.total_spent || 0).toLocaleString()}</p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-1">
+                        {starCount > 0 && [...Array(starCount)].map((_, i) => (
+                          <span key={i} className="text-[10px]">⭐</span>
+                        ))}
+                        {starCount === 0 && <span className="text-[10px] text-slate-300">-</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredCustomers.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-6 py-20 text-center">

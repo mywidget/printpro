@@ -15,7 +15,6 @@ export enum PricingType {
   DIMENSION = 'DIMENSION'
 }
 
-// Category sekarang adalah interface, bukan enum hardcoded
 export interface CategoryItem {
   id: string;
   name: string;
@@ -28,6 +27,20 @@ export enum PaymentMethod {
   BANK_TRANSFER = 'BANK_TRANSFER',
   QRIS = 'QRIS',
   CREDIT_CARD = 'CREDIT_CARD'
+}
+
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  STAFF = 'STAFF'
+}
+
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  password?: string;
+  role: UserRole;
+  lastLogin?: Date;
 }
 
 export interface InventoryItem {
@@ -62,8 +75,8 @@ export interface ProductMaterialLink {
 export interface Product {
   id: string;
   name: string;
-  categoryId: string; // Menggunakan ID kategori
-  categoryName?: string; // Untuk mempermudah display
+  categoryId: string;
+  categoryName?: string;
   pricingType: PricingType;
   basePrice: number;
   costPrice: number;

@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, PricingType, CategoryItem } from '../types';
+import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, PricingType, CategoryItem, User, UserRole } from '../types';
 import { PRODUCTS } from '../constants';
 
 const KEYS = {
@@ -8,10 +8,35 @@ const KEYS = {
   INVENTORY: 'printpro_inventory',
   SETTINGS: 'printpro_settings',
   CUSTOMERS: 'printpro_customers',
-  CATEGORIES: 'printpro_categories'
+  CATEGORIES: 'printpro_categories',
+  USERS: 'printpro_users',
+  SESSION: 'printpro_session'
 };
 
+const INITIAL_USERS: User[] = [
+  { id: 'u-1', username: 'admin', name: 'Administrator', password: 'admin', role: UserRole.ADMIN }
+];
+
 export const StorageService = {
+  getUsers: (): User[] => {
+    const data = localStorage.getItem(KEYS.USERS);
+    return data ? JSON.parse(data) : INITIAL_USERS;
+  },
+
+  saveUsers: (users: User[]) => {
+    localStorage.setItem(KEYS.USERS, JSON.stringify(users));
+  },
+
+  authenticate: (username: string, password: string): User | null => {
+    const users = StorageService.getUsers();
+    const user = users.find(u => u.username === username && u.password === password);
+    if (user) {
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword as User;
+    }
+    return null;
+  },
+
   getCategories: (defaults: CategoryItem[]): CategoryItem[] => {
     const data = localStorage.getItem(KEYS.CATEGORIES);
     return data ? JSON.parse(data) : defaults;
@@ -146,6 +171,7 @@ export const StorageService = {
       customers: StorageService.getCustomers(),
       settings: StorageService.getSettings({} as any),
       categories: StorageService.getCategories([]),
+      users: StorageService.getUsers(),
       exportDate: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
@@ -156,7 +182,6 @@ export const StorageService = {
     link.click();
   },
 
-  // Fix: Added missing importData method
   importData: async (file: File): Promise<void> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -170,6 +195,7 @@ export const StorageService = {
           if (data.customers) localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(data.customers));
           if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
           if (data.categories) localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(data.categories));
+          if (data.users) localStorage.setItem(KEYS.USERS, JSON.stringify(data.users));
           resolve();
         } catch (err) {
           reject(err);

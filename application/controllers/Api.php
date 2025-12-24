@@ -27,6 +27,72 @@
             ->set_status_header($code)
             ->set_output(json_encode($data));
 		}
+		/**
+			* Helper untuk input JSON (Pengganti getJSON CI4)
+		*/
+		private function _get_json() {
+			return json_decode(file_get_contents('php://input'), true);
+		}
+		// ==========================================
+		// AUTHENTICATION (LOGIN)
+		// ==========================================
+		public function login() {
+			if ($this->input->method() !== 'post') return $this->_json(['message' => 'Method not allowed'], 405);
+			
+			$json = $this->_get_json();
+			$username = $json['username'] ?? '';
+			$password = $json['password'] ?? '';
+			
+			$user = $this->db->where('username', $username)->get('users')->row_array();
+			
+			if ($user && password_verify($password, $user['password'])) {
+				$this->db->where('id', $user['id'])->update('users', ['last_login' => date('Y-m-d H:i:s')]);
+				unset($user['password']);
+				return $this->_json($user);
+			}
+			
+			return $this->_json(['message' => 'Username atau Password salah'], 401);
+		}
+		
+		// ==========================================
+		// USER MANAGEMENT
+		// ==========================================
+		public function users($id = null) {
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
+				$data = $this->db->select('id, username, name, role, last_login')->get('users')->result();
+				return $this->_json($data);
+			}
+			
+			if ($method === 'post') {
+				$json = $this->_get_json();
+				$data = [
+                'username' => $json['username'],
+                'name'     => $json['name'],
+                'role'     => $json['role'] ?? 'STAFF'
+				];
+				
+				if (!empty($json['password'])) {
+					$data['password'] = password_hash($json['password'], PASSWORD_DEFAULT);
+				}
+				
+				$exists = $this->db->where('id', $json['id'])->get('users')->num_rows();
+				if ($exists > 0) {
+					$this->db->where('id', $json['id'])->update('users', $data);
+					} else {
+					$data['id'] = $json['id'];
+					$this->db->insert('users', $data);
+				}
+				return $this->_json(['status' => 'ok']);
+			}
+			
+			if ($method === 'delete' && $id) {
+				if ($id === 'u-admin') return $this->_json(['message' => 'Admin utama tidak bisa dihapus'], 403);
+				$this->db->where('id', $id)->delete('users');
+				return $this->_json(['status' => 'deleted']);
+			}
+		}
 		
 		/**
 			* SINKRONISASI MASAL (Push to Server)
@@ -206,39 +272,62 @@
 			}
 		}
 		
-		/**
-			* ENDPOINT ORDERS
-		*/
+		// ==========================================
+		// ORDERS
+		// ==========================================
 		public function orders($id = null) {
-			if ($this->input->method() === 'get') {
-				$this->_json($this->db->get('orders')->result());
-				} elseif ($this->input->method() === 'post') {
-				$json = json_decode(file_get_contents('php://input'), true);
-				$this->db->insert('orders', [
-                'id'             => $json['id'],
-                'customer_name'  => $json['customerName'],
-                'customer_phone' => $json['customerPhone'],
-                'status'         => 'PENDING',
-                'total_amount'   => $json['totalAmount'],
-                'paid_amount'    => $json['paidAmount'],
-                'payment_method' => $json['paymentMethod'],
-                'created_at'     => date('Y-m-d H:i:s'),
-                'items_json'     => json_encode($json['items'])
-				]);
-				$this->_json(['status' => 'ok'], 201);
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
+				$data = $this->db->order_by('created_at', 'DESC')->get('orders')->result();
+				return $this->_json($data);
+			}
+			
+			if ($method === 'post') {
+				$json = $this->_get_json();
+				$data = [
+                'customer_name'  => $json['customerName'] ?? '',
+                'customer_phone' => $json['customerPhone'] ?? '',
+                'status'         => $json['status'] ?? 'PENDING',
+                'total_amount'   => $json['totalAmount'] ?? 0,
+                'paid_amount'    => $json['paidAmount'] ?? 0,
+                'payment_method' => $json['paymentMethod'] ?? 'CASH',
+                'items_json'     => json_encode($json['items'] ?? [])
+				];
+				
+				$exists = $this->db->where('id', $json['id'])->get('orders')->num_rows();
+				if ($exists > 0) {
+					$this->db->where('id', $json['id'])->update('orders', $data);
+					} else {
+					$data['id'] = $json['id'];
+					$data['created_at'] = date('Y-m-d H:i:s');
+					$this->db->insert('orders', $data);
+				}
+				return $this->_json(['status' => 'ok']);
 			}
 		}
 		
 		public function inventory() { $this->_json($this->db->get('inventory')->result()); }
 		public function customers() { $this->_json($this->db->get('customers')->result()); }
 		public function settings() {
-			if ($this->input->method() === 'get') {
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
 				$res = $this->db->get('settings')->result();
 				$data = [];
 				foreach($res as $r) { $data[$r->key] = $r->value; }
 				$this->_json($data);
+			} 
+			elseif ($method === 'post') {
+				// Mengambil input JSON dari React
+				$json = json_decode(file_get_contents('php://input'), true);
+				
+				foreach ($json as $key => $val) {
+					// Gunakan REPLACE INTO agar jika key sudah ada, nilainya diupdate
+					$this->db->query("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", [$key, $val]);
+				}
+				
+				$this->_json(['status' => 'ok', 'message' => 'Pengaturan berhasil disimpan']);
 			}
 		}
-		
-		
-	}	
+	}						
