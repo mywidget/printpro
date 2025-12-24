@@ -16,6 +16,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
   };
 
   const items = order.items || [];
+  const totalAmount = Number(order.totalAmount || 0);
+  const paidAmount = Number(order.paidAmount || 0);
+  const balance = totalAmount - paidAmount;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:p-0 print:bg-white overflow-y-auto">
@@ -46,7 +49,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
         {/* Content Area */}
         <div id="invoice-content" className={`p-8 print:p-4 ${printMode === 'thermal' ? 'font-mono text-[12px]' : ''}`}>
           
-          {/* Header Layout based on Mode */}
           <div className={`flex flex-col ${printMode === 'inkjet' ? 'md:flex-row justify-between items-start mb-10' : 'items-center text-center mb-6'}`}>
             <div className={printMode === 'thermal' ? 'w-full border-b border-dashed border-slate-300 pb-4 mb-4' : ''}>
               <h1 className={`${printMode === 'thermal' ? 'text-xl' : 'text-3xl'} font-black text-indigo-600 mb-1`}>
@@ -69,7 +71,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
             </div>
           </div>
 
-          {/* Customer & Payment Info */}
           <div className={`grid ${printMode === 'thermal' ? 'grid-cols-1 gap-2' : 'grid-cols-2 gap-8'} mb-6 ${printMode === 'inkjet' ? 'border-y border-slate-100 py-6' : ''}`}>
             <div>
               <h4 className="text-[9px] font-bold text-slate-400 uppercase mb-1">Pelanggan:</h4>
@@ -79,20 +80,19 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
             <div className={printMode === 'thermal' ? 'border-b border-dashed border-slate-300 pb-4' : 'text-right'}>
               <h4 className="text-[9px] font-bold text-slate-400 uppercase mb-1">Pembayaran:</h4>
               <p className="font-bold text-indigo-600 uppercase">{order.paymentMethod?.replace('_', ' ') || 'CASH'}</p>
-              <p className="text-[11px] text-slate-500">
-                {(order.paidAmount || 0) >= (order.totalAmount || 0) ? 'LUNAS' : 'BELUM LUNAS'}
+              <p className="text-[11px] text-slate-500 font-bold">
+                {balance <= 0 ? 'STATUS: LUNAS' : 'STATUS: BELUM LUNAS'}
               </p>
             </div>
           </div>
 
-          {/* Items List */}
           <div className="mb-6">
             {printMode === 'inkjet' ? (
               <table className="w-full mb-6">
                 <thead>
                   <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase">
-                    <th className="text-left pb-3">Deskripsi Produk</th>
-                    <th className="text-center pb-3">Ukuran (P x L)</th>
+                    <th className="text-left pb-3">Produk</th>
+                    <th className="text-center pb-3">Ukuran</th>
                     <th className="text-center pb-3">Qty</th>
                     <th className="text-right pb-3">Harga</th>
                     <th className="text-right pb-3">Total</th>
@@ -112,13 +112,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
                       <td className="py-4 text-right font-black text-slate-900">Rp {(item.totalPrice || 0).toLocaleString()}</td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
-                    <tr><td colSpan={5} className="py-10 text-center text-slate-400 italic">Tidak ada item</td></tr>
-                  )}
                 </tbody>
               </table>
             ) : (
-              /* Thermal List View */
               <div className="space-y-3 border-b border-dashed border-slate-300 pb-4">
                 {items.map((item, idx) => (
                   <div key={idx} className="flex flex-col">
@@ -127,73 +123,52 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, storeSettings, onClo
                       <span>Rp {(item.totalPrice || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-[10px] text-slate-500">
-                      <span>
-                        {item.quantity} x {(item.unitPrice || 0).toLocaleString()} 
-                        {item.width && item.height ? ` (${item.width}x${item.height}m)` : ''}
-                      </span>
+                      <span>{item.quantity} x {item.unitPrice.toLocaleString()} {item.width ? `(${item.width}x${item.height})` : ''}</span>
                     </div>
                   </div>
                 ))}
-                {items.length === 0 && <p className="text-center text-slate-400 italic py-4">Tidak ada item</p>}
               </div>
             )}
           </div>
 
-          {/* Totals Section */}
           <div className={`flex flex-col ${printMode === 'inkjet' ? 'items-end' : 'items-stretch'} mt-4`}>
-            {printMode === 'thermal' && (
-               <div className="flex justify-between py-1 text-slate-600">
-                 <span>Subtotal</span>
-                 <span>Rp {(order.totalAmount || 0).toLocaleString()}</span>
-               </div>
-            )}
-            <div className={`${printMode === 'thermal' ? 'border-t border-dashed border-slate-300 pt-2 flex justify-between' : 'w-64 border-t border-indigo-100 pt-4 flex justify-between'} items-center`}>
-              <span className={`font-black text-slate-900 ${printMode === 'thermal' ? 'text-sm' : 'text-lg'}`}>TOTAL</span>
+            <div className={`${printMode === 'thermal' ? 'mb-2 flex justify-between' : 'w-64 border-t border-indigo-100 pt-4 mb-2 flex justify-between'} items-center`}>
+              <span className={`font-black text-slate-900 ${printMode === 'thermal' ? 'text-xs' : 'text-lg'}`}>GRAND TOTAL</span>
               <span className={`font-black text-indigo-600 ${printMode === 'thermal' ? 'text-sm' : 'text-2xl'}`}>
-                Rp {(order.totalAmount || 0).toLocaleString()}
+                Rp {totalAmount.toLocaleString()}
               </span>
+            </div>
+
+            <div className={`${printMode === 'thermal' ? 'flex flex-col gap-1' : 'w-64 space-y-1'}`}>
+              <div className="flex justify-between text-slate-600">
+                <span className="text-[10px] font-bold uppercase">Bayar / DP</span>
+                <span className="text-sm font-bold">Rp {paidAmount.toLocaleString()}</span>
+              </div>
+              
+              <div className={`flex justify-between ${balance > 0 ? 'text-red-600 font-black' : 'text-emerald-600'}`}>
+                <span className="text-[10px] font-bold uppercase">{balance > 0 ? 'Sisa Piutang' : 'Kembalian / Lunas'}</span>
+                <span className="text-sm font-black">Rp {Math.abs(balance).toLocaleString()}</span>
+              </div>
             </div>
           </div>
 
-          {/* Footer Note */}
           <div className={`mt-10 ${printMode === 'thermal' ? 'text-center border-t border-dashed border-slate-300 pt-6' : 'border-t border-slate-50 pt-8'}`}>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Catatan:</p>
-            <p className="text-[10px] text-slate-500 italic leading-relaxed">
-              {storeSettings.footerNote || 'Barang yang sudah dibeli tidak dapat dikembalikan. Terima kasih!'}
+            <p className="text-[10px] text-slate-500 italic leading-relaxed text-center">
+              {storeSettings.footerNote || 'Terima kasih atas pesanan Anda! Barang yang sudah dibeli tidak dapat ditukar/dikembalikan.'}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons - Hidden on Print */}
         <div className="p-6 bg-slate-50 flex gap-4 print:hidden border-t border-slate-100">
-          <button 
-            onClick={onClose} 
-            className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all"
-          >
-            TUTUP
-          </button>
-          <button 
-            onClick={handlePrint} 
-            className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            <span>🖨️</span> CETAK {printMode.toUpperCase()}
-          </button>
+          <button onClick={onClose} className="flex-1 bg-white border border-slate-200 text-slate-600 font-bold py-4 rounded-2xl hover:bg-slate-100 transition-all">TUTUP</button>
+          <button onClick={handlePrint} className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-xl hover:bg-indigo-700 active:scale-95 transition-all">CETAK STRUK</button>
         </div>
       </div>
 
       <style>{`
         @media print {
-          body { 
-            background: white; 
-          }
-          #root > main { 
-            display: none !important; 
-          }
-          #invoice-content {
-            padding: 0 !important;
-            margin: 0 !important;
-            width: 100% !important;
-          }
+          body { background: white; }
+          #root > main { display: none !important; }
           @page {
             margin: ${printMode === 'thermal' ? '0.2cm' : '1.5cm'};
             size: ${printMode === 'thermal' ? '80mm auto' : 'A4'};

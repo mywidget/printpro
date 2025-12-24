@@ -257,20 +257,84 @@
 			}
 		}
 		
-		/**
-			* ENDPOINT PRODUK
-		*/
-		public function products() {
-			if ($this->input->method() === 'get') {
+		// ==========================================
+		// PRODUCTS
+		// ==========================================
+		public function products($id = null) {
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
 				$data = $this->db->get('products')->result();
-				// Decode JSON string kembali ke object untuk React
 				foreach ($data as &$p) {
 					$p->price_ranges = json_decode($p->price_ranges);
 					$p->materials = json_decode($p->materials);
 				}
-				$this->_json($data);
+				return $this->_json($data);
+			}
+			
+			if ($method === 'post') {
+				$json = $this->_get_json();
+				$data = [
+				'name'         => $json['name'],
+				'category_id'  => $json['category_id'],
+				'pricing_type' => $json['pricing_type'],
+				'base_price'   => $json['base_price'],
+				'cost_price'   => $json['cost_price'],
+				'unit'         => $json['unit'],
+				'description'  => $json['description'] ?? '',
+				'price_ranges' => json_encode($json['price_ranges'] ?? []),
+				'materials'    => json_encode($json['materials'] ?? [])
+				];
+				
+				$exists = $this->db->where('id', $json['id'])->get('products')->num_rows();
+				if ($exists > 0) {
+					$this->db->where('id', $json['id'])->update('products', $data);
+					} else {
+					$data['id'] = $json['id'];
+					$this->db->insert('products', $data);
+				}
+				return $this->_json(['status' => 'ok']);
+			}
+			
+			if ($method === 'delete' && $id) {
+				$this->db->where('id', $id)->delete('products');
+				return $this->_json(['status' => 'deleted']);
 			}
 		}
+		
+		// ==========================================
+		// CUSTOMERS
+		// ==========================================
+		public function customers($id = null) {
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
+				return $this->_json($this->db->get('customers')->result());
+			}
+			
+			if ($method === 'post') {
+				$json = $this->_get_json();
+				$data = [
+				'name'         => $json['name'],
+				'phone'        => $json['phone'],
+				'email'        => $json['email'] ?? '',
+				'total_orders' => $json['total_orders'] ?? 0,
+				'total_spent'  => $json['total_spent'] ?? 0,
+				'join_date'    => $json['join_date'] ?? date('Y-m-d H:i:s')
+				];
+				
+				$exists = $this->db->where('id', $json['id'])->get('customers')->num_rows();
+				if ($exists > 0) {
+					$this->db->where('id', $json['id'])->update('customers', $data);
+					} else {
+					$data['id'] = $json['id'];
+					$this->db->insert('customers', $data);
+				}
+				return $this->_json(['status' => 'ok']);
+			}
+		}
+		
+		
 		
 		// ==========================================
 		// ORDERS
@@ -285,15 +349,34 @@
 			
 			if ($method === 'post') {
 				$json = $this->_get_json();
-				$data = [
-                'customer_name'  => $json['customerName'] ?? '',
-                'customer_phone' => $json['customerPhone'] ?? '',
-                'status'         => $json['status'] ?? 'PENDING',
-                'total_amount'   => $json['totalAmount'] ?? 0,
-                'paid_amount'    => $json['paidAmount'] ?? 0,
-                'payment_method' => $json['paymentMethod'] ?? 'CASH',
-                'items_json'     => json_encode($json['items'] ?? [])
-				];
+				
+				// Debug: lihat data yang diterima
+				// file_put_contents('debug_log.txt', print_r($json, true));
+				
+				// Cek format data yang diterima
+				if (isset($json['customer_name'])) {
+					// Format dengan underscore
+					$data = [
+					'customer_name'  => $json['customer_name'] ?? '',
+					'customer_phone' => $json['customer_phone'] ?? '',
+					'status'         => $json['status'] ?? 'PENDING',
+					'total_amount'   => $json['total_amount'] ?? 0,
+					'paid_amount'    => $json['paid_amount'] ?? 0,
+					'payment_method' => $json['payment_method'] ?? 'CASH',
+					'items_json'     => $json['items_json'] ?? '[]'  // Langsung ambil items_json
+					];
+					} else {
+					// Format dengan camelCase (kode asli)
+					$data = [
+					'customer_name'  => $json['customerName'] ?? '',
+					'customer_phone' => $json['customerPhone'] ?? '',
+					'status'         => $json['status'] ?? 'PENDING',
+					'total_amount'   => $json['totalAmount'] ?? 0,
+					'paid_amount'    => $json['paidAmount'] ?? 0,
+					'payment_method' => $json['paymentMethod'] ?? 'CASH',
+					'items_json'     => json_encode($json['items'] ?? [])
+					];
+				}
 				
 				$exists = $this->db->where('id', $json['id'])->get('orders')->num_rows();
 				if ($exists > 0) {
@@ -307,8 +390,42 @@
 			}
 		}
 		
-		public function inventory() { $this->_json($this->db->get('inventory')->result()); }
-		public function customers() { $this->_json($this->db->get('customers')->result()); }
+		
+		// ==========================================
+		// INVENTORY
+		// ==========================================
+		public function inventory($id = null) {
+			$method = $this->input->method();
+			
+			if ($method === 'get') {
+				return $this->_json($this->db->get('inventory')->result());
+			}
+			
+			if ($method === 'post') {
+				$json = $this->_get_json();
+				$data = [
+				'name'      => $json['name'],
+				'category'  => $json['category'],
+				'stock'     => $json['stock'],
+				'min_stock' => $json['min_stock'],
+				'unit'      => $json['unit']
+				];
+				
+				$exists = $this->db->where('id', $json['id'])->get('inventory')->num_rows();
+				if ($exists > 0) {
+					$this->db->where('id', $json['id'])->update('inventory', $data);
+					} else {
+					$data['id'] = $json['id'];
+					$this->db->insert('inventory', $data);
+				}
+				return $this->_json(['status' => 'ok']);
+			}
+			
+			if ($method === 'delete' && $id) {
+				$this->db->where('id', $id)->delete('inventory');
+				return $this->_json(['status' => 'deleted']);
+			}
+		}
 		public function settings() {
 			$method = $this->input->method();
 			
@@ -330,4 +447,5 @@
 				$this->_json(['status' => 'ok', 'message' => 'Pengaturan berhasil disimpan']);
 			}
 		}
-	}						
+		
+	}											

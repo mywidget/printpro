@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import NewOrder from './components/NewOrder';
@@ -14,7 +15,7 @@ import OrderHistory from './components/OrderHistory';
 import UserManager from './components/UserManager';
 import Login from './components/Login';
 import Profile from './components/Profile';
-import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, CategoryItem, User, UserRole } from './types';
+import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, CategoryItem, User } from './types';
 import { StorageService } from './services/storage';
 import { ApiService } from './services/api';
 
@@ -54,9 +55,9 @@ const App: React.FC = () => {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [useApi, setUseApi] = useState(() => localStorage.getItem('printpro_use_api') === 'true');
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     if (!currentUser) return;
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     setApiError(null);
     try {
       if (useApi) {
@@ -88,7 +89,7 @@ const App: React.FC = () => {
     } catch (err) {
       if (useApi) setApiError(err instanceof Error ? err.message : 'Koneksi Gagal');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -110,205 +111,209 @@ const App: React.FC = () => {
     sessionStorage.removeItem('printpro_current_user');
   };
 
-  const handleUpdateActiveProfile = async (updatedUser: User) => {
+  const handleAddOrder = async (orderData: any) => {
+    const newOrder: Order = { 
+      ...orderData, 
+      id: `ORD-${Date.now()}`, 
+      createdAt: new Date(), 
+      status: OrderStatus.PENDING 
+    };
     try {
       if (useApi) {
-        await ApiService.upsertUser(updatedUser);
+        // Mode Online: Sinkronisasi Pelanggan ke Server
+        if (newOrder.customerName) {
+           // Cari apakah pelanggan sudah ada di state lokal untuk mendapatkan ID dan akumulasi
+           const existing = customers.find(c => 
+             (c.phone && c.phone.trim() === newOrder.customerPhone.trim()) || 
+             (c.name.toLowerCase() === newOrder.customerName.toLowerCase())
+           );
+           
+           await ApiService.upsertCustomer({
+             id: existing ? existing.id : `cust-${Date.now()}`, // Kirim ID agar backend tidak error
+             name: newOrder.customerName,
+             phone: newOrder.customerPhone,
+             total_orders: (existing?.totalOrders || 0) + 1,
+             total_spent: (existing?.totalSpent || 0) + newOrder.totalAmount
+           } as any);
+        }
+        await ApiService.upsertOrder(newOrder);
+        await loadData(true);
+      } else {
+        StorageService.saveOrder(newOrder);
+        setOrders(prev => [newOrder, ...prev]);
+        setCustomers(StorageService.getCustomers());
+        setInventory(StorageService.getInventory());
       }
-      
-      // Update state user saat ini
-      const { password, ...safeUser } = updatedUser;
-      setCurrentUser(safeUser as User);
-      sessionStorage.setItem('printpro_current_user', JSON.stringify(safeUser));
-
-      // Update di list users agar konsisten
-      const updatedUsers = users.map(u => u.id === updatedUser.id ? updatedUser : u);
-      setUsers(updatedUsers);
-      StorageService.saveUsers(updatedUsers);
-    } catch (e) {
-      throw e;
+      setActiveTab('orders');
+      setSelectedOrderForInvoice(newOrder);
+      Swal.fire({ icon: 'success', title: 'Order Disimpan', timer: 1000, showConfirmButton: false });
+    } catch (e) { 
+      console.error(e);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan pesanan.' });
     }
   };
 
-  // --- CRUD HANDLERS FOR USERS ---
-  const handleAddUser = async (user: User) => {
+  const handleUpdateOrder = async (updatedOrder: Order) => {
     try {
-      if (useApi) await ApiService.upsertUser(user);
-      const updated = [...users, user];
-      setUsers(updated);
-      StorageService.saveUsers(updated);
-    } catch (e) { alert(`Gagal: ${e instanceof Error ? e.message : 'Error'}`); }
-  };
-
-  const handleEditUser = async (user: User) => {
-    try {
-      if (useApi) await ApiService.upsertUser(user);
-      const updated = users.map(u => u.id === user.id ? user : u);
-      setUsers(updated);
-      StorageService.saveUsers(updated);
-      
-      // Jika user yang diedit adalah user yang sedang login, update sesinya juga
-      if (user.id === currentUser?.id) {
-         const { password, ...safeUser } = user;
-         setCurrentUser(safeUser as User);
-         sessionStorage.setItem('printpro_current_user', JSON.stringify(safeUser));
+      if (useApi) {
+        await ApiService.upsertOrder(updatedOrder);
+        await loadData(true);
+      } else {
+        const all = StorageService.getOrders();
+        const updated = all.map(o => o.id === updatedOrder.id ? updatedOrder : o);
+        localStorage.setItem('printpro_orders', JSON.stringify(updated));
+        setOrders(updated);
       }
-    } catch (e) { alert(`Gagal: ${e instanceof Error ? e.message : 'Error'}`); }
+    } catch (e) { 
+      Swal.fire({ icon: 'error', title: 'Gagal Update', text: 'Data tidak tersimpan.' });
+    }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    try {
-      if (useApi) await ApiService.deleteUser(id);
-      const updated = users.filter(u => u.id !== id);
-      setUsers(updated);
-      StorageService.saveUsers(updated);
-    } catch (e) { alert(`Gagal: ${e instanceof Error ? e.message : 'Error'}`); }
+  const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
+    const orderToUpdate = orders.find(o => o.id === id);
+    if (!orderToUpdate) return;
+    const updatedOrder = { ...orderToUpdate, status };
+    await handleUpdateOrder(updatedOrder);
   };
 
-  const handlePush = async () => {
+  const handleUpsertProduct = async (product: Product) => {
     try {
-      const payload = {
-        products: StorageService.getProducts(),
-        inventory: StorageService.getInventory(),
-        orders: StorageService.getOrders(),
-        customers: StorageService.getCustomers(),
-        settings: StorageService.getSettings(settings),
-        categories: StorageService.getCategories(categories),
-        users: StorageService.getUsers()
-      };
-      await ApiService.syncAll(payload);
-      alert('Berhasil push!');
-      loadData(); 
-    } catch (e) { alert(`Gagal push: ${e instanceof Error ? e.message : 'Error'}`); }
-  };
-
-  // --- CRUD HANDLERS (Generic) ---
-  const handleAddProduct = async (product: Product) => {
-    try {
-      if (useApi) await ApiService.upsertProduct(product);
-      const updated = [...products, product];
-      setProducts(updated);
-      StorageService.saveProducts(updated);
-    } catch (e) { alert(`Error: ${e}`); }
-  };
-
-  const handleEditProduct = async (product: Product) => {
-    try {
-      if (useApi) await ApiService.upsertProduct(product);
-      const updated = products.map(p => p.id === product.id ? product : p);
-      setProducts(updated);
-      StorageService.saveProducts(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.upsertProduct(product); }
+      else {
+        const all = StorageService.getProducts();
+        const existingIdx = all.findIndex(p => p.id === product.id);
+        const updated = existingIdx > -1 ? all.map(p => p.id === product.id ? product : p) : [product, ...all];
+        StorageService.saveProducts(updated);
+        setProducts(updated);
+      }
+      await loadData(true);
+      Swal.fire({ icon: 'success', title: 'Produk Disimpan', timer: 1000, showConfirmButton: false });
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan produk.' }); }
   };
 
   const handleDeleteProduct = async (id: string) => {
     try {
-      if (useApi) await ApiService.deleteProduct(id);
-      const updated = products.filter(p => p.id !== id);
-      setProducts(updated);
-      StorageService.saveProducts(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.deleteProduct(id); }
+      else {
+        const updated = products.filter(p => p.id !== id);
+        StorageService.saveProducts(updated);
+        setProducts(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus produk.' }); }
   };
 
-  const handleAddCategory = async (category: CategoryItem) => {
+  const handleUpsertCategory = async (cat: CategoryItem) => {
     try {
-      if (useApi) await ApiService.upsertCategory(category);
-      const updated = [...categories, category];
-      setCategories(updated);
-      StorageService.saveCategories(updated);
-    } catch (e) { alert(`Error: ${e}`); }
-  };
-
-  const handleEditCategory = async (category: CategoryItem) => {
-    try {
-      if (useApi) await ApiService.upsertCategory(category);
-      const updated = categories.map(c => c.id === category.id ? category : c);
-      setCategories(updated);
-      StorageService.saveCategories(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.syncAll({ categories: [cat] }); }
+      else {
+        const all = StorageService.getCategories(DEFAULT_CATEGORIES);
+        const exists = all.findIndex(c => c.id === cat.id);
+        const updated = exists > -1 ? all.map(c => c.id === cat.id ? cat : c) : [...all, cat];
+        StorageService.saveCategories(updated);
+        setCategories(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan kategori.' }); }
   };
 
   const handleDeleteCategory = async (id: string) => {
     try {
-      if (useApi) await ApiService.deleteCategory(id);
-      const updated = categories.filter(c => c.id !== id);
-      setCategories(updated);
-      StorageService.saveCategories(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.deleteCategory(id); }
+      else {
+        const updated = categories.filter(c => c.id !== id);
+        StorageService.saveCategories(updated);
+        setCategories(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus kategori.' }); }
   };
 
-  const handleAddInventory = async (item: InventoryItem) => {
+  const handleUpsertInventory = async (item: InventoryItem) => {
     try {
-      if (useApi) await ApiService.upsertInventory(item);
-      const updated = [...inventory, item];
-      setInventory(updated);
-      StorageService.saveInventory(updated);
-    } catch (e) { alert(`Error: ${e}`); }
-  };
-
-  const handleEditInventory = async (item: InventoryItem) => {
-    try {
-      if (useApi) await ApiService.upsertInventory(item);
-      const updated = inventory.map(i => i.id === item.id ? item : i);
-      setInventory(updated);
-      StorageService.saveInventory(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.syncAll({ inventory: [item] }); }
+      else {
+        const all = StorageService.getInventory();
+        const exists = all.findIndex(i => i.id === item.id);
+        const updated = exists > -1 ? all.map(i => i.id === item.id ? item : i) : [...all, item];
+        StorageService.saveInventory(updated);
+        setInventory(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan stok.' }); }
   };
 
   const handleDeleteInventory = async (id: string) => {
     try {
-      if (useApi) await ApiService.deleteInventory(id);
-      const updated = inventory.filter(i => i.id !== id);
-      setInventory(updated);
-      StorageService.saveInventory(updated);
-    } catch (e) { alert(`Error: ${e}`); }
+      if (useApi) { await ApiService.deleteInventory(id); }
+      else {
+        const updated = inventory.filter(i => i.id !== id);
+        StorageService.saveInventory(updated);
+        setInventory(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus stok.' }); }
+  };
+
+  const handleUpsertUser = async (user: User) => {
+    try {
+      if (useApi) { await ApiService.upsertUser(user); }
+      else {
+        const all = StorageService.getUsers();
+        const exists = all.findIndex(u => u.id === user.id);
+        const updated = exists > -1 ? all.map(u => u.id === user.id ? user : u) : [...all, user];
+        StorageService.saveUsers(updated);
+        setUsers(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan user.' }); }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    try {
+      if (useApi) { await ApiService.deleteUser(id); }
+      else {
+        const updated = users.filter(u => u.id !== id);
+        StorageService.saveUsers(updated);
+        setUsers(updated);
+      }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus user.' }); }
+  };
+
+  const handleUpdateProfile = async (updatedUser: User) => {
+    await handleUpsertUser(updatedUser);
+    setCurrentUser(updatedUser);
+    sessionStorage.setItem('printpro_current_user', JSON.stringify(updatedUser));
   };
 
   const handleUpdateSettings = async (newSettings: StoreSettings) => {
     try {
-      if (useApi) await ApiService.saveSettings(newSettings);
+      if (useApi) { await ApiService.saveSettings(newSettings); }
+      else { StorageService.saveSettings(newSettings); }
       setSettings(newSettings);
-      StorageService.saveSettings(newSettings);
-    } catch (e) { alert(`Error: ${e}`); }
-  };
-
-  const handleAddOrder = async (orderData: any) => {
-    const newOrder: Order = { ...orderData, id: `ORD-${Date.now()}`, createdAt: new Date(), status: OrderStatus.PENDING };
-    try {
-      if (useApi) await ApiService.upsertOrder(newOrder);
-      StorageService.saveOrder(newOrder);
-      setOrders(prev => [newOrder, ...prev]);
-      setActiveTab('orders');
-      setSelectedOrderForInvoice(newOrder);
-    } catch (e) { alert(`Error: ${e}`); }
-  };
-
-  const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
-    try {
-      const orderToUpdate = orders.find(o => o.id === id);
-      if (!orderToUpdate) return;
-      const updatedOrder = { ...orderToUpdate, status };
-      const previousOrders = [...orders];
-      setOrders(prev => prev.map(o => o.id === id ? updatedOrder : o));
-      if (useApi) {
-        try { await ApiService.updateOrderStatus(updatedOrder); } catch (e) { setOrders(previousOrders); alert(`Sync Failed: ${e}`); }
-      } else { StorageService.updateOrderStatus(id, status); }
-    } catch (e) { alert("Kesalahan."); }
+      await loadData(true);
+    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan pengaturan.' }); }
   };
 
   const stats = useMemo(() => {
-    const activeOrders = orders.filter(o => o.status !== OrderStatus.CANCELLED);
+    const activeOrders = (orders || []).filter(o => o.status !== OrderStatus.CANCELLED && o.status !== OrderStatus.RETURNED);
+    const problematicOrders = (orders || []).filter(o => o.status === OrderStatus.CANCELLED || o.status === OrderStatus.RETURNED);
     const today = new Date().toDateString();
-    const totalSales = activeOrders.filter(o => new Date(o.createdAt).toDateString() === today).reduce((sum, o) => sum + o.totalAmount, 0);
+    
+    const totalSales = activeOrders.filter(o => new Date(o.createdAt).toDateString() === today).reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+    const totalReceivable = activeOrders.reduce((sum, o) => sum + (Number(o.totalAmount || 0) - Number(o.paidAmount || 0)), 0);
     const pendingOrders = activeOrders.filter(o => o.status !== OrderStatus.DONE).length;
     const completedToday = activeOrders.filter(o => o.status === OrderStatus.DONE && new Date(o.createdAt).toDateString() === today).length;
+    const problematicCount = problematicOrders.length;
+    
     const revenueByDay = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
-      const amount = activeOrders.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).reduce((sum, o) => sum + o.totalAmount, 0);
+      const amount = activeOrders.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
       revenueByDay.push({ date: d.toLocaleDateString('id-ID', { weekday: 'short' }), amount });
     }
-    return { totalSales, pendingOrders, completedToday, revenueByDay };
+    return { totalSales, totalReceivable, pendingOrders, completedToday, problematicCount, revenueByDay };
   }, [orders]);
 
   const renderContent = () => {
@@ -317,36 +322,33 @@ const App: React.FC = () => {
         <h3 className="text-xl font-black text-slate-900 mb-2">Server Tidak Merespon</h3>
         <p className="text-sm text-slate-500 mb-8">{apiError}</p>
         <div className="flex gap-4">
-          <button onClick={() => loadData()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold">Coba Lagi</button>
+          <button onClick={() => loadData()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">Coba Lagi</button>
           <button onClick={() => setUseApi(false)} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold">Mode Offline</button>
         </div>
       </div>
     );
-
-    if (isLoading) return <div className="flex items-center justify-center h-[60vh]"><div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
+    if (isLoading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-xs font-black text-indigo-600 animate-pulse tracking-widest">SINKRONISASI DATA...</p>
+    </div>;
     
     switch (activeTab) {
-      case 'dashboard': return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
+      case 'dashboard': return <Dashboard stats={stats as any} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
       case 'new-order': return <NewOrder products={products} customers={customers} categories={categories} onAddOrder={handleAddOrder} />;
-      case 'orders': return <OrderHistory orders={orders} onUpdateStatus={handleUpdateOrderStatus} onViewInvoice={setSelectedOrderForInvoice} />;
-      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onAddProduct={handleAddProduct} onEditProduct={handleEditProduct} onDeleteProduct={handleDeleteProduct} />;
-      case 'categories': return <CategoryManager categories={categories} onAddCategory={handleAddCategory} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} />;
-      case 'inventory': return <Inventory items={inventory} onAddInventory={handleAddInventory} onEditInventory={handleEditInventory} onDeleteInventory={handleDeleteInventory} />;
-      case 'customers': return <Customers customers={customers.map((c: any) => ({
-        id: String(c.id), name: c.name || 'Pelanggan', phone: c.phone || '-', email: c.email || '-',
-        total_orders: Number(c.totalOrders || c.total_orders || 0), total_spent: Number(c.totalSpent || c.total_spent || 0)
-      }))} />;
-      case 'reports': return <Reports />;
-      case 'users': return <UserManager users={users} onAddUser={handleAddUser} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />;
-      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={handleUpdateSettings} onPush={handlePush} onPull={loadData} />;
-      case 'profile': return <Profile user={currentUser!} onUpdate={handleUpdateActiveProfile} />;
-      default: return <Dashboard stats={stats} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
+      case 'orders': return <OrderHistory orders={orders} onUpdateStatus={handleUpdateOrderStatus} onUpdateOrder={handleUpdateOrder} onViewInvoice={setSelectedOrderForInvoice} />;
+      case 'reports': return <Reports orders={orders} products={products} categories={categories} />;
+      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onAddProduct={handleUpsertProduct} onEditProduct={handleUpsertProduct} onDeleteProduct={handleDeleteProduct} />;
+      case 'categories': return <CategoryManager categories={categories} onAddCategory={handleUpsertCategory} onEditCategory={handleUpsertCategory} onDeleteCategory={handleDeleteCategory} />;
+      case 'inventory': return <Inventory items={inventory} onAddInventory={handleUpsertInventory} onEditInventory={handleUpsertInventory} onDeleteInventory={handleDeleteInventory} />;
+      case 'customers': return <Customers customers={customers} onEditCustomer={() => {}} />;
+      case 'users': return <UserManager users={users} onAddUser={handleUpsertUser} onEditUser={handleUpsertUser} onDeleteUser={handleDeleteUser} />;
+      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={handleUpdateSettings} onPush={() => loadData()} onPull={() => loadData()} />;
+      case 'profile': return currentUser ? <Profile user={currentUser} onUpdate={handleUpdateProfile} /> : null;
+      default: return <Dashboard stats={stats as any} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
     }
   };
 
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!currentUser) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
@@ -360,16 +362,7 @@ const App: React.FC = () => {
              </span>
            </div>
            <div className="flex items-center gap-3">
-             <div className="text-right hidden sm:block">
-               <p className="text-[10px] font-black text-slate-900 leading-none">{currentUser.name}</p>
-               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role}</p>
-             </div>
-             <button 
-               onClick={() => setActiveTab('profile')}
-               className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-xs text-white font-black shadow-lg shadow-indigo-100 hover:scale-105 transition-transform"
-             >
-               {currentUser.name.charAt(0)}
-             </button>
+             <button onClick={() => setActiveTab('profile')} className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-xs text-white font-black shadow-lg hover:scale-105 transition-transform">{currentUser.name.charAt(0)}</button>
            </div>
         </header>
         {renderContent()}

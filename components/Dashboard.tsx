@@ -4,8 +4,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { DashboardStats, Order, OrderStatus } from '../types';
 import { STATUS_COLORS } from '../constants';
 
+interface ExtendedStats extends DashboardStats {
+  problematicCount?: number;
+}
+
 interface DashboardProps {
-  stats: DashboardStats;
+  stats: ExtendedStats;
   recentOrders: Order[];
   onUpdateStatus?: (id: string, status: OrderStatus) => void;
 }
@@ -13,11 +17,12 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ stats, recentOrders, onUpdateStatus }) => {
   return (
     <div className="space-y-6 md:space-y-8 p-4 md:p-8 pb-10">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <StatCard title="Daily Revenue" value={`Rp ${stats.totalSales.toLocaleString()}`} icon="💰" color="text-emerald-600" />
-        <StatCard title="Pending Jobs" value={stats.pendingOrders.toString()} icon="⏳" color="text-amber-600" />
-        <StatCard title="Completed Today" value={stats.completedToday.toString()} icon="✅" color="text-indigo-600" />
-        <StatCard title="Total Orders" value={recentOrders.length.toString()} icon="📝" color="text-blue-600" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
+        <StatCard title="Daily Revenue" value={`Rp ${stats.totalSales.toLocaleString()}`} icon="💰" color="text-indigo-600" />
+        <StatCard title="Total Piutang" value={`Rp ${stats.totalReceivable.toLocaleString()}`} icon="📉" color="text-amber-600" />
+        <StatCard title="Pending Jobs" value={stats.pendingOrders.toString()} icon="⏳" color="text-blue-600" />
+        <StatCard title="Completed Today" value={stats.completedToday.toString()} icon="✅" color="text-emerald-600" />
+        <StatCard title="Batal & Retur" value={stats.problematicCount?.toString() || '0'} icon="⚠️" color="text-rose-600" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
@@ -45,7 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, recentOrders, onUpdateStat
         <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
           <h3 className="text-base md:text-lg font-bold mb-6">Live Production status</h3>
           <div className="space-y-3">
-            {recentOrders.slice(0, 6).map((order) => (
+            {recentOrders.slice(0, 8).map((order) => (
               <div key={order.id} className="p-3 rounded-xl border border-slate-50 bg-slate-50/50 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <div className="min-w-0 pr-2">
@@ -68,12 +73,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, recentOrders, onUpdateStat
                 </select>
               </div>
             ))}
-            {recentOrders.length === 0 && (
-              <div className="text-center py-10">
-                <p className="text-slate-300 text-3xl mb-2">📭</p>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">No active jobs</p>
-              </div>
-            )}
           </div>
         </div>
       </div>

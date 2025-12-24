@@ -130,28 +130,52 @@ export const StorageService = {
 
   getCustomers: (): Customer[] => {
     const data = localStorage.getItem(KEYS.CUSTOMERS);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      return JSON.parse(data).map((c: any) => ({ ...c, joinDate: new Date(c.joinDate) }));
+    } catch (e) { return []; }
   },
 
-  syncCustomerFromOrder: (order: Order) => {
-    if (!order.customerName) return;
+  saveCustomers: (customers: Customer[]) => {
+    localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
+  },
+
+  syncCustomerFromOrder: (order: Order): Customer[] => {
+    if (!order.customerName) return StorageService.getCustomers();
     const customers = StorageService.getCustomers();
-    const phone = order.customerPhone || 'no-phone';
-    const existingIdx = customers.findIndex(c => c.phone === phone);
-    if (existingIdx >= 0) {
-      customers[existingIdx].totalOrders += 1;
-      customers[existingIdx].totalSpent += order.totalAmount;
+    const phone = (order.customerPhone || '').trim();
+    const name = (order.customerName || '').trim();
+    
+    // Cari pelanggan berdasarkan nomor telepon (prioritas) atau nama jika telepon kosong
+    let existingIdx = -1;
+    if (phone) {
+      existingIdx = customers.findIndex(c => (c.phone || '').trim() === phone);
     } else {
+      existingIdx = customers.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
+    }
+
+    if (existingIdx >= 0) {
+      // Pelanggan Lama: Update statistik
+      customers[existingIdx].totalOrders += 1;
+      customers[existingIdx].totalSpent += Number(order.totalAmount || 0);
+      // Jika nama berubah di order tapi telepon sama, anggap update nama
+      if (name && customers[existingIdx].name !== name) {
+        customers[existingIdx].name = name;
+      }
+    } else {
+      // Pelanggan Baru: Tambahkan ke list
       customers.push({
         id: `cust-${Date.now()}`,
-        name: order.customerName,
+        name: name,
         phone: phone,
         totalOrders: 1,
-        totalSpent: order.totalAmount,
+        totalSpent: Number(order.totalAmount || 0),
         joinDate: new Date()
       });
     }
-    localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
+    
+    StorageService.saveCustomers(customers);
+    return customers;
   },
 
   getSettings: (defaults: StoreSettings): StoreSettings => {

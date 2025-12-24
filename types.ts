@@ -126,6 +126,7 @@ export interface Customer {
 
 export interface DashboardStats {
   totalSales: number;
+  totalReceivable: number;
   pendingOrders: number;
   completedToday: number;
   revenueByDay: { date: string; amount: number }[];
