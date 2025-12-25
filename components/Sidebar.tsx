@@ -17,10 +17,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
     { id: 'new-order', label: 'Order Baru', icon: '➕' },
     { id: 'orders', label: 'Riwayat', icon: '📝' },
     { id: 'catalog', label: 'Katalog', icon: '📒' },
-    { id: 'categories', label: 'Kategori', icon: '🏷️' },
+    { id: 'categories', label: 'Kategori', icon: '🏷️', adminOnly: true },
     { id: 'inventory', label: 'Stok Bahan', icon: '📦' },
     { id: 'customers', label: 'Pelanggan', icon: '👥' },
-    { id: 'reports', label: 'Laporan', icon: '📈' },
+    { id: 'reports', label: 'Laporan', icon: '📈', adminOnly: true },
     { id: 'users', label: 'Manajemen User', icon: '👤', adminOnly: true },
     { id: 'settings', label: 'Pengaturan', icon: '⚙️', adminOnly: true },
     { id: 'profile', label: 'Profil Saya', icon: '🔑' },
@@ -30,7 +30,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
     !item.adminOnly || currentUser?.role === UserRole.ADMIN
   );
 
-  // Menu utama untuk bottom bar (4 item pertama)
   const mobilePrimaryMenu = filteredMenu.slice(0, 4);
 
   const handleMobileNav = (id: string) => {
@@ -40,7 +39,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
 
   return (
     <>
-      {/* DESKTOP SIDEBAR */}
       <div className="hidden lg:flex w-64 bg-white border-r border-slate-200 flex-col h-screen fixed left-0 top-0 z-20 shadow-sm">
         <div className="p-6">
           <h1 className="text-2xl font-black text-indigo-600 flex items-center gap-2">
@@ -52,8 +50,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
               onClick={() => setActiveTab('profile')}
               className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 w-full text-left hover:bg-indigo-50 transition-all group"
             >
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-400">Logged in as</p>
-               <p className="text-xs font-bold text-slate-800 truncate group-hover:text-indigo-600">{currentUser.name}</p>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-400">
+                 {currentUser.role === UserRole.ADMIN ? '👑 Administrator' : '👤 Staff Operator'}
+               </p>
+               <p className="text-xs font-bold text-slate-800 truncate group-hover:text-indigo-600">
+                 {currentUser?.name || currentUser?.username || 'User'}
+               </p>
             </button>
           )}
         </div>
@@ -86,7 +88,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
         </div>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex items-center justify-around px-2 py-2 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.05)]">
         {mobilePrimaryMenu.map((item) => (
           <button
@@ -101,7 +102,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
           </button>
         ))}
         
-        {/* Tombol Menu Lainnya (Mobile Only) */}
         <button
           onClick={() => setIsMobileMenuOpen(true)}
           className={`flex flex-col items-center justify-center flex-1 py-1 transition-all ${
@@ -113,7 +113,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, currentUser,
         </button>
       </div>
 
-      {/* MOBILE FULLSCREEN MENU OVERLAY */}
       {isMobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-[100] animate-in fade-in duration-200">
           <div 

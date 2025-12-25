@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Product, InventoryItem, ProductMaterialLink, PricingType, PriceRange, CategoryItem } from '../types';
+import { Product, InventoryItem, ProductMaterialLink, PricingType, PriceRange, CategoryItem, UserRole } from '../types';
 
 interface CatalogProps {
   products: Product[];
@@ -9,9 +9,10 @@ interface CatalogProps {
   onAddProduct: (product: Product) => void;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (id: string) => void;
+  userRole?: UserRole;
 }
 
-const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], categories = [], onAddProduct, onEditProduct, onDeleteProduct }) => {
+const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], categories = [], onAddProduct, onEditProduct, onDeleteProduct, userRole }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<Partial<Product>>({ 
@@ -20,7 +21,10 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
     pricingType: PricingType.UNIT 
   });
 
+  const isAdmin = userRole === UserRole.ADMIN;
+
   const openModal = (product?: Product) => {
+    if (!isAdmin) return;
     if (product) {
       setEditingProduct(product);
       setFormData({ 
@@ -52,6 +56,7 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (editingProduct) {
       onEditProduct({ ...editingProduct, ...formData } as Product);
     } else {
@@ -61,6 +66,7 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
   };
 
   const handleDelete = (id: string) => {
+    if (!isAdmin) return;
     if (confirm('Hapus produk ini dari katalog?')) {
       onDeleteProduct(id);
     }
@@ -113,9 +119,11 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
           <h2 className="text-xl md:text-2xl font-bold text-slate-900">Katalog Produk</h2>
           <p className="text-xs md:text-sm text-slate-500 font-medium">Kelola harga, stok otomatis, dan kebijakan retur bahan</p>
         </div>
-        <button onClick={() => openModal()} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
-          + Tambah Produk
-        </button>
+        {isAdmin && (
+          <button onClick={() => openModal()} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
+            + Tambah Produk
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
@@ -127,7 +135,7 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                 <th className="px-6 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Tipe</th>
                 <th className="px-6 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Harga Jual</th>
                 <th className="px-6 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Konfigurasi Bahan</th>
-                <th className="px-6 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Aksi</th>
+                {isAdmin && <th className="px-6 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -153,17 +161,19 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
                       {(!product.materials || product.materials.length === 0) && <span className="text-[10px] text-slate-300 italic">-</span>}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                       <button onClick={() => openModal(product)} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">Edit</button>
-                       <button onClick={() => handleDelete(product.id)} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all">Hapus</button>
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                         <button onClick={() => openModal(product)} className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-xl transition-all">Edit</button>
+                         <button onClick={() => handleDelete(product.id)} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all">Hapus</button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-20 text-center text-slate-400 text-sm font-bold italic">
+                  <td colSpan={isAdmin ? 5 : 4} className="px-6 py-20 text-center text-slate-400 text-sm font-bold italic">
                     Belum ada produk dalam database.
                   </td>
                 </tr>
@@ -173,7 +183,7 @@ const Catalog: React.FC<CatalogProps> = ({ products = [], inventory = [], catego
         </div>
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-[2.5rem] w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-8 border-b border-slate-100 flex justify-between items-center">

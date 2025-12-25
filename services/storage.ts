@@ -17,6 +17,14 @@ const INITIAL_USERS: User[] = [
   { id: 'u-1', username: 'admin', name: 'Administrator', password: 'admin', role: UserRole.ADMIN }
 ];
 
+// Helper to get default categories since it's used in multiple places
+const DEFAULT_CATEGORIES: CategoryItem[] = [
+  { id: 'cat-1', name: 'Digital A3+' },
+  { id: 'cat-2', name: 'Outdoor Banner' },
+  { id: 'cat-3', name: 'Indoor & Studio' },
+  { id: 'cat-4', name: 'Sticker & Label' }
+];
+
 export const StorageService = {
   getUsers: (): User[] => {
     const data = localStorage.getItem(KEYS.USERS);
@@ -37,7 +45,7 @@ export const StorageService = {
     return null;
   },
 
-  getCategories: (defaults: CategoryItem[]): CategoryItem[] => {
+  getCategories: (defaults: CategoryItem[] = DEFAULT_CATEGORIES): CategoryItem[] => {
     const data = localStorage.getItem(KEYS.CATEGORIES);
     return data ? JSON.parse(data) : defaults;
   },
@@ -52,18 +60,6 @@ export const StorageService = {
     try {
       return JSON.parse(data).map((o: any) => ({ ...o, createdAt: new Date(o.createdAt) }));
     } catch (e) { return []; }
-  },
-
-  getOrdersByRange: (start: Date, end: Date): Order[] => {
-    const orders = StorageService.getOrders();
-    const startDate = new Date(start);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
-    return orders.filter(o => {
-      const orderDate = new Date(o.createdAt);
-      return orderDate >= startDate && orderDate <= endDate;
-    });
   },
 
   saveOrder: (order: Order) => {
@@ -98,25 +94,6 @@ export const StorageService = {
       }
     });
     if (changed) StorageService.saveInventory(inventory);
-  },
-
-  updateOrderStatus: (orderId: string, newStatus: OrderStatus) => {
-    const orders = StorageService.getOrders();
-    const idx = orders.findIndex(o => o.id === orderId);
-    if (idx !== -1) {
-      const oldStatus = orders[idx].status;
-      orders[idx].status = newStatus;
-      
-      // Logika otomatis untuk retur stok jika status berubah menjadi CANCELLED atau RETURNED
-      if (newStatus === OrderStatus.CANCELLED) {
-        StorageService.adjustStockForOrder(orders[idx], 'restore_full');
-      } else if (newStatus === OrderStatus.RETURNED) {
-        StorageService.adjustStockForOrder(orders[idx], 'restore_recoverable');
-      }
-      
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(orders));
-    }
-    return orders;
   },
 
   getProducts: (): Product[] => {
@@ -193,22 +170,34 @@ export const StorageService = {
   },
 
   exportAllData: () => {
+    // Pastikan semua data diambil, termasuk fallback ke konstanta jika localStorage masih kosong
     const fullData = {
       orders: StorageService.getOrders(),
       products: StorageService.getProducts(),
       inventory: StorageService.getInventory(),
       customers: StorageService.getCustomers(),
-      settings: StorageService.getSettings({} as any),
-      categories: StorageService.getCategories([]),
+      settings: StorageService.getSettings({
+        name: 'PrintPro Digital Solutions',
+        address: '',
+        phone: '',
+        email: '',
+        footerNote: '',
+        currency: 'IDR'
+      } as StoreSettings),
+      categories: StorageService.getCategories(DEFAULT_CATEGORIES),
       users: StorageService.getUsers(),
-      exportDate: new Date().toISOString()
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0'
     };
+    
     const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     link.href = url;
-    link.download = `printpro_backup.json`;
+    link.download = `printpro_backup_${timestamp}.json`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   },
 
   importData: async (file: File): Promise<void> => {
@@ -218,6 +207,12 @@ export const StorageService = {
         try {
           const content = e.target?.result as string;
           const data = JSON.parse(content);
+          
+          // Validasi sederhana struktur data
+          if (!data.orders && !data.products && !data.inventory) {
+            throw new Error('Format file backup tidak dikenali atau data kosong.');
+          }
+
           if (data.orders) localStorage.setItem(KEYS.ORDERS, JSON.stringify(data.orders));
           if (data.products) localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(data.products));
           if (data.inventory) localStorage.setItem(KEYS.INVENTORY, JSON.stringify(data.inventory));
@@ -225,12 +220,13 @@ export const StorageService = {
           if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
           if (data.categories) localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(data.categories));
           if (data.users) localStorage.setItem(KEYS.USERS, JSON.stringify(data.users));
+          
           resolve();
         } catch (err) {
           reject(err);
         }
       };
-      reader.onerror = () => reject(new Error('Gagal membaca file.'));
+      reader.onerror = () => reject(new Error('Gagal membaca file dari perangkat Anda.'));
       reader.readAsText(file);
     });
   }

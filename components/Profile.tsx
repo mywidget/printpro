@@ -8,7 +8,7 @@ interface ProfileProps {
 }
 
 const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
-  const [name, setName] = useState(user.name);
+  const [name, setName] = useState(user?.name || user?.username || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +28,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
       const updatedData: User = { 
         ...user, 
         name,
-        password: password || undefined // Hanya kirim password jika diisi
+        password: password || undefined 
       };
       
       await onUpdate(updatedData);
@@ -52,12 +52,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdate }) => {
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden">
         <div className="p-8 bg-indigo-600 text-white flex items-center gap-6">
            <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl font-black border border-white/30">
-             {user.name.charAt(0)}
+             {(user?.name || user?.username || '?').charAt(0)}
            </div>
            <div>
-             <h3 className="text-xl font-bold">{user.name}</h3>
-             <p className="text-xs font-bold text-indigo-100 uppercase tracking-widest">Role: {user.role}</p>
-             <p className="text-[10px] text-indigo-200 mt-1">Username: {user.username}</p>
+             <h3 className="text-xl font-bold">{user?.name || user?.username}</h3>
+             <p className="text-xs font-bold text-indigo-100 uppercase tracking-widest">Role: {user?.role}</p>
+             <p className="text-[10px] text-indigo-200 mt-1">Username: {user?.username}</p>
            </div>
         </div>
 

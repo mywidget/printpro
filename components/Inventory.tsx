@@ -1,22 +1,26 @@
 
 import React, { useState } from 'react';
-import { InventoryItem } from '../types';
+import { InventoryItem, UserRole } from '../types';
 
 interface InventoryProps {
   items: InventoryItem[];
   onAddInventory: (item: InventoryItem) => void;
   onEditInventory: (item: InventoryItem) => void;
   onDeleteInventory: (id: string) => void;
+  userRole?: UserRole;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInventory, onDeleteInventory }) => {
+const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInventory, onDeleteInventory, userRole }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'restock'>('add');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [formData, setFormData] = useState<Partial<InventoryItem>>({});
   const [restockAmount, setRestockAmount] = useState<number>(0);
 
+  const isAdmin = userRole === UserRole.ADMIN;
+
   const openModal = (mode: 'add' | 'edit' | 'restock', item?: InventoryItem) => {
+    if (!isAdmin) return;
     setModalMode(mode);
     if (item) {
       setSelectedItem(item);
@@ -37,6 +41,7 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (modalMode === 'add') {
       onAddInventory({ ...formData, id: `inv-${Date.now()}` } as InventoryItem);
     } else if (modalMode === 'edit' && selectedItem) {
@@ -48,6 +53,7 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
   };
 
   const handleDelete = (id: string) => {
+    if (!isAdmin) return;
     if (window.confirm('Hapus material ini dari database?')) {
       onDeleteInventory(id);
     }
@@ -60,12 +66,14 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Stock Inventory</h2>
           <p className="text-sm text-slate-500">Manage your printing materials and supplies</p>
         </div>
-        <button 
-          onClick={() => openModal('add')}
-          className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-        >
-          <span>➕</span> Add New Material
-        </button>
+        {isAdmin && (
+          <button 
+            onClick={() => openModal('add')}
+            className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+          >
+            <span>➕</span> Add New Material
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -76,22 +84,24 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
                 <span className="text-[10px] font-bold uppercase text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md">{item.category}</span>
                 <h3 className="font-bold text-lg mt-2 text-slate-800">{item.name}</h3>
               </div>
-              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => openModal('edit', item)}
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                  title="Edit"
-                >
-                  ✏️
-                </button>
-                <button 
-                  onClick={() => handleDelete(item.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete"
-                >
-                  🗑️
-                </button>
-              </div>
+              {isAdmin && (
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => openModal('edit', item)}
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(item.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
             </div>
             
             <div className="flex items-end justify-between">
@@ -103,12 +113,14 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Min. Alert: {item.minStock}</p>
-                <button 
-                  onClick={() => openModal('restock', item)}
-                  className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
-                >
-                  📥 Restock
-                </button>
+                {isAdmin && (
+                  <button 
+                    onClick={() => openModal('restock', item)}
+                    className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                  >
+                    📥 Restock
+                  </button>
+                )}
               </div>
             </div>
 
@@ -124,7 +136,7 @@ const Inventory: React.FC<InventoryProps> = ({ items, onAddInventory, onEditInve
         )}
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-300">
             <form onSubmit={handleSave}>

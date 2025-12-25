@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { StoreSettings } from '../types';
 import { StorageService } from '../services/storage';
+import Swal from 'sweetalert2';
 
 interface SettingsProps {
   initialSettings: StoreSettings;
@@ -27,20 +28,73 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onUpdateSettings, 
   };
 
   const handleExport = () => {
-    StorageService.exportAllData();
+    Swal.fire({
+      title: 'Menyiapkan Backup',
+      text: 'Sistem sedang merangkum seluruh database Anda...',
+      icon: 'info',
+      timer: 1500,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    }).then(() => {
+      StorageService.exportAllData();
+      Swal.fire({
+        title: 'Export Berhasil!',
+        text: 'File backup telah diunduh ke perangkat Anda.',
+        icon: 'success',
+        confirmButtonColor: '#4f46e5'
+      });
+    });
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (confirm('Importing data akan menimpa database lokal Anda. Lanjutkan?')) {
-        try {
-          await StorageService.importData(file);
-          alert('Data berhasil diimpor! Halaman akan dimuat ulang.');
-          window.location.reload();
-        } catch (err) {
-          alert('Gagal impor data. Periksa format file.');
-        }
+    if (!file) return;
+
+    // Reset input agar bisa pilih file yang sama lagi jika gagal
+    e.target.value = '';
+
+    const result = await Swal.fire({
+      title: 'Konfirmasi Import',
+      text: 'Import data akan MENGHAPUS dan MENIMPA database lokal Anda saat ini. Tindakan ini tidak dapat dibatalkan. Lanjutkan?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Ya, Timpa Data!',
+      cancelButtonText: 'Batal',
+      reverseButtons: true
+    });
+
+    if (result.isConfirmed) {
+      try {
+        Swal.fire({
+          title: 'Sedang Memproses',
+          text: 'Harap tunggu, database sedang diperbarui...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        await StorageService.importData(file);
+        
+        await Swal.fire({
+          title: 'Import Selesai!',
+          text: 'Seluruh data berhasil dipulihkan. Halaman akan dimuat ulang.',
+          icon: 'success',
+          confirmButtonColor: '#4f46e5'
+        });
+
+        window.location.reload();
+      } catch (err) {
+        Swal.fire({
+          title: 'Gagal Import',
+          text: err instanceof Error ? err.message : 'Terjadi kesalahan saat membaca file backup.',
+          icon: 'error',
+          confirmButtonColor: '#4f46e5'
+        });
       }
     }
   };
@@ -108,6 +162,23 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onUpdateSettings, 
                 </select>
               </div>
             </div>
+
+            <div className="pt-6 border-t border-slate-50">
+              <h3 className="font-black text-emerald-600 flex items-center gap-3 text-sm uppercase tracking-widest mb-6">
+                 <span className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-lg">💬</span> WhatsApp Gateway (Fonnte)
+              </h3>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Fonnte API Token</label>
+                <input 
+                  type="password" 
+                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-mono text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Paste your Fonnte token here"
+                  value={localSettings.fonnteToken || ''}
+                  onChange={e => setLocalSettings({...localSettings, fonnteToken: e.target.value})}
+                />
+                <p className="mt-2 text-[9px] text-slate-400 font-medium">Dapatkan token di <a href="https://fonnte.com" target="_blank" className="text-indigo-500 underline">fonnte.com</a> untuk mengaktifkan fitur kirim invoice otomatis.</p>
+              </div>
+            </div>
             
             <div className="pt-4 flex justify-end">
               <button 
@@ -115,7 +186,7 @@ const Settings: React.FC<SettingsProps> = ({ initialSettings, onUpdateSettings, 
                 disabled={isSaving}
                 className="bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
               >
-                {isSaving ? 'Menyimpan...' : 'Update Identitas'}
+                {isSaving ? 'Menyimpan...' : 'Simpan Semua Pengaturan'}
               </button>
             </div>
           </div>

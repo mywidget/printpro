@@ -59,6 +59,7 @@ export interface StoreSettings {
   email: string;
   footerNote: string;
   currency: string;
+  fonnteToken?: string; // New: For WhatsApp Integration
 }
 
 export interface PriceRange {

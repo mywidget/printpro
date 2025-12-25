@@ -208,6 +208,18 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
                 </div>
               )}
             </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">No. WhatsApp Pelanggan</label>
+              <input 
+                type="text" 
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
+                placeholder="0812XXXXXXXX" 
+                value={customer.phone} 
+                onChange={e => setCustomer({...customer, phone: e.target.value})} 
+              />
+            </div>
+
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Metode Pembayaran</label>
               <select 
