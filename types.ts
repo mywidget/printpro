@@ -34,12 +34,27 @@ export enum UserRole {
   STAFF = 'STAFF'
 }
 
+export interface ApiEndpoint {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  isMainBranch: boolean;
+}
+
 export interface User {
   id: string;
   username: string;
   name: string;
   password?: string;
   role: UserRole;
+  branchId?: string;
   lastLogin?: Date;
 }
 
@@ -50,6 +65,7 @@ export interface InventoryItem {
   stock: number;
   minStock: number;
   unit: string;
+  branchId: string;
 }
 
 export interface StoreSettings {
@@ -59,7 +75,8 @@ export interface StoreSettings {
   email: string;
   footerNote: string;
   currency: string;
-  fonnteToken?: string; // New: For WhatsApp Integration
+  fonnteToken?: string;
+  apiEndpoints?: ApiEndpoint[];
 }
 
 export interface PriceRange {
@@ -103,6 +120,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  branchId: string;
   customerName: string;
   customerPhone: string;
   items: OrderItem[];

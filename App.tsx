@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, CategoryItem, User, UserRole } from './types';
+import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, CategoryItem, User, UserRole, Branch } from './types';
 import { StorageService } from './services/storage';
 import { ApiService } from './services/api';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -16,6 +16,7 @@ import CategoryManager from './components/CategoryManager';
 import InvoiceModal from './components/InvoiceModal';
 import OrderHistory from './components/OrderHistory';
 import UserManager from './components/UserManager';
+import BranchManager from './components/BranchManager';
 import Login from './components/Login';
 import Profile from './components/Profile';
 
@@ -25,15 +26,10 @@ const DEFAULT_SETTINGS: StoreSettings = {
   phone: '0812-3456-7890',
   email: 'hello@printpro.pos',
   footerNote: 'Terima kasih atas kepercayaan Anda!',
-  currency: 'IDR'
+  currency: 'IDR',
+  apiEndpoints: [],
+  fonnteToken: ''
 };
-
-const DEFAULT_CATEGORIES: CategoryItem[] = [
-  { id: 'cat-1', name: 'Digital A3+' },
-  { id: 'cat-2', name: 'Outdoor Banner' },
-  { id: 'cat-3', name: 'Indoor & Studio' },
-  { id: 'cat-4', name: 'Sticker & Label' }
-];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -42,6 +38,8 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string>('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -54,48 +52,72 @@ const App: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [useApi, setUseApi] = useState(() => localStorage.getItem('printpro_use_api') === 'true');
+  const [currentApiUrl, setCurrentApiUrl] = useState(() => localStorage.getItem('printpro_active_api_url') || '');
 
-  // RBAC Guard
   useEffect(() => {
-    if (currentUser && currentUser.role !== UserRole.ADMIN) {
-      const adminOnlyTabs = ['reports', 'users', 'settings', 'categories'];
-      if (adminOnlyTabs.includes(activeTab)) {
-        setActiveTab('dashboard');
-        Swal.fire({ icon: 'error', title: 'Akses Dibatasi', text: 'Izin ditolak.', timer: 2000, showConfirmButton: false });
+    localStorage.setItem('printpro_use_api', useApi.toString());
+    if (currentApiUrl) {
+      localStorage.setItem('printpro_active_api_url', currentApiUrl);
+      ApiService.setBaseUrl(currentApiUrl);
+    }
+  }, [useApi, currentApiUrl]);
+
+  useEffect(() => {
+    if (currentUser) {
+      const allBranches = StorageService.getBranches();
+      setBranches(allBranches);
+      if (currentUser.role === UserRole.STAFF) {
+        setActiveBranchId(currentUser.branchId || allBranches[0].id);
+      } else if (!activeBranchId && allBranches.length > 0) {
+        setActiveBranchId(allBranches[0].id);
       }
     }
-  }, [activeTab, currentUser]);
+  }, [currentUser]);
 
   const loadData = async (silent = false) => {
-    if (!currentUser) return;
+    if (!currentUser || !activeBranchId) return;
     if (!silent) setIsLoading(true);
     setApiError(null);
     try {
-      if (useApi) {
-        const [prods, inv, ords, custs, sett, cats, usrs] = await Promise.all([
+      if (useApi && ApiService.getBaseUrl()) {
+        const [prods, inv, ords, custs, sett, cats, usrs, brs] = await Promise.all([
           ApiService.getProducts(),
-          ApiService.getInventory(),
-          ApiService.getOrders(),
+          ApiService.getInventory(activeBranchId),
+          ApiService.getOrders(activeBranchId),
           ApiService.getCustomers(),
           ApiService.getSettings(),
           ApiService.getCategories(),
-          ApiService.getUsers()
+          ApiService.getUsers(),
+          ApiService.getBranches()
         ]);
+        
         setProducts(prods);
         setInventory(inv);
         setOrders(ords);
         setCustomers(custs);
-        setSettings(sett || DEFAULT_SETTINGS);
-        setCategories(cats && cats.length > 0 ? cats : DEFAULT_CATEGORIES);
+        setCategories(cats && cats.length > 0 ? cats : StorageService.getCategories());
         setUsers(usrs);
+        setBranches(brs);
+
+        // PERBAIKAN: Prioritaskan apiEndpoints dari Server (sett), 
+        // tapi jika server kosong, baru ambil dari Local Storage sebagai fallback
+        const localSett = StorageService.getSettings(DEFAULT_SETTINGS);
+        setSettings({ 
+          ...sett, 
+          apiEndpoints: (sett.apiEndpoints && sett.apiEndpoints.length > 0) 
+            ? sett.apiEndpoints 
+            : (localSett.apiEndpoints || []) 
+        });
+
       } else {
         setProducts(StorageService.getProducts());
-        setInventory(StorageService.getInventory());
-        setOrders(StorageService.getOrders());
+        setInventory(StorageService.getInventory(activeBranchId));
+        setOrders(StorageService.getOrders(activeBranchId));
         setCustomers(StorageService.getCustomers());
         setSettings(StorageService.getSettings(DEFAULT_SETTINGS));
-        setCategories(StorageService.getCategories(DEFAULT_CATEGORIES));
+        setCategories(StorageService.getCategories());
         setUsers(StorageService.getUsers());
+        setBranches(StorageService.getBranches());
       }
     } catch (err) {
       if (useApi) setApiError(err instanceof Error ? err.message : 'Koneksi Gagal');
@@ -105,352 +127,172 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('printpro_use_api', String(useApi));
+    if (currentUser && activeBranchId) {
       loadData();
     }
-  }, [useApi, currentUser]);
-
-  // SINKRONISASI LOGIC
-  const handlePushData = async () => {
-    if (!useApi) {
-      Swal.fire({ icon: 'info', title: 'Mode Offline', text: 'Aktifkan mode Online Server untuk melakukan Push.' });
-      return;
-    }
-
-    const result = await Swal.fire({
-      title: 'Push ke Server?',
-      text: 'Seluruh data di Server akan diganti dengan data dari browser ini.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Ya, Upload!',
-      cancelButtonText: 'Batal'
-    });
-
-    if (result.isConfirmed) {
-      setIsLoading(true);
-      try {
-        const payload = {
-          products: StorageService.getProducts(),
-          inventory: StorageService.getInventory(),
-          orders: StorageService.getOrders(),
-          customers: StorageService.getCustomers(),
-          categories: StorageService.getCategories(DEFAULT_CATEGORIES),
-          settings: StorageService.getSettings(DEFAULT_SETTINGS)
-        };
-        await ApiService.syncAll(payload);
-        Swal.fire({ icon: 'success', title: 'Berhasil Push!', text: 'Server kini sinkron dengan data lokal Anda.' });
-        await loadData();
-      } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Gagal Push', text: err instanceof Error ? err.message : 'Terjadi kesalahan.' });
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const handlePullData = async () => {
-    if (!useApi) {
-      Swal.fire({ icon: 'info', title: 'Mode Offline', text: 'Aktifkan mode Online Server untuk melakukan Pull.' });
-      return;
-    }
-
-    const result = await Swal.fire({
-      title: 'Pull dari Server?',
-      text: 'Data lokal di browser ini akan dihapus dan diganti dengan data dari Server.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Ya, Download!',
-      cancelButtonText: 'Batal'
-    });
-
-    if (result.isConfirmed) {
-      setIsLoading(true);
-      try {
-        // Ambil data terbaru dari server
-        const [prods, inv, ords, custs, sett, cats, usrs] = await Promise.all([
-          ApiService.getProducts(),
-          ApiService.getInventory(),
-          ApiService.getOrders(),
-          ApiService.getCustomers(),
-          ApiService.getSettings(),
-          ApiService.getCategories(),
-          ApiService.getUsers()
-        ]);
-        
-        // Simpan ke local storage
-        StorageService.saveProducts(prods);
-        StorageService.saveInventory(inv);
-        localStorage.setItem('printpro_orders', JSON.stringify(ords));
-        StorageService.saveCustomers(custs);
-        StorageService.saveSettings(sett);
-        StorageService.saveCategories(cats);
-        StorageService.saveUsers(usrs);
-
-        Swal.fire({ icon: 'success', title: 'Berhasil Pull!', text: 'Data lokal kini sinkron dengan Server.' });
-        await loadData();
-      } catch (err) {
-        Swal.fire({ icon: 'error', title: 'Gagal Pull', text: err instanceof Error ? err.message : 'Terjadi kesalahan.' });
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const handleLogin = (user: User, isApiMode: boolean) => {
-    setUseApi(isApiMode);
-    setCurrentUser(user);
-    sessionStorage.setItem('printpro_current_user', JSON.stringify(user));
-  };
+  }, [useApi, currentUser, activeBranchId, currentApiUrl]);
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setActiveBranchId('');
     sessionStorage.removeItem('printpro_current_user');
   };
 
-  const handleAddOrder = async (orderData: any) => {
-    const newOrder: Order = { ...orderData, id: `ORD-${Date.now()}`, createdAt: new Date(), status: OrderStatus.PENDING };
+  const saveAction = async (action: () => Promise<any>) => {
     try {
-      if (useApi) {
-        await ApiService.upsertOrder(newOrder);
-        await loadData(true);
-      } else {
-        StorageService.saveOrder(newOrder);
-        setOrders(prev => [newOrder, ...prev]);
-        setCustomers(StorageService.getCustomers());
-        setInventory(StorageService.getInventory());
-      }
-      setActiveTab('orders');
-      setSelectedOrderForInvoice(newOrder);
-      Swal.fire({ icon: 'success', title: 'Order Disimpan', timer: 1000, showConfirmButton: false });
-    } catch (e) { 
-      Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan pesanan.' });
+      await action();
+      await loadData(true);
+      Swal.fire({ icon: 'success', title: 'Berhasil', timer: 1000, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ icon: 'error', title: 'Gagal', text: 'Terjadi kesalahan sistem' });
     }
   };
 
-  const handleUpdateOrder = async (updatedOrder: Order) => {
+  const handlePush = async () => {
+    const confirm = await Swal.fire({ title: 'Push ke Server?', text: `Data lokal akan dikirim ke: ${currentApiUrl}`, icon: 'question', showCancelButton: true, confirmButtonText: 'Ya, Unggah!' });
+    if (!confirm.isConfirmed) return;
+    setIsLoading(true);
     try {
-      if (useApi) {
-        await ApiService.upsertOrder(updatedOrder);
-        await loadData(true);
-      } else {
-        const all = StorageService.getOrders();
-        const updated = all.map(o => o.id === updatedOrder.id ? updatedOrder : o);
-        localStorage.setItem('printpro_orders', JSON.stringify(updated));
-        setOrders(updated);
-      }
-    } catch (e) { 
-      Swal.fire({ icon: 'error', title: 'Gagal Update', text: 'Data tidak tersimpan.' });
+      await ApiService.syncAll({
+        categories: StorageService.getCategories(),
+        products: StorageService.getProducts(),
+        inventory: StorageService.getInventory(),
+        customers: StorageService.getCustomers(),
+        orders: StorageService.getOrders()
+      });
+      Swal.fire('Berhasil!', 'Data lokal telah disinkronkan.', 'success');
+    } catch (err) {
+      Swal.fire('Gagal!', err instanceof Error ? err.message : 'Gagal', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleUpdateOrderStatus = async (id: string, status: OrderStatus) => {
-    const orderToUpdate = orders.find(o => o.id === id);
-    if (!orderToUpdate) return;
-    const updatedOrder = { ...orderToUpdate, status };
-    await handleUpdateOrder(updatedOrder);
+  const handlePull = async () => {
+    const confirm = await Swal.fire({ title: 'Pull dari Server?', text: `Data lokal akan diganti dengan data dari: ${currentApiUrl}`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Tarik!' });
+    if (!confirm.isConfirmed) return;
+    setIsLoading(true);
+    try {
+      const [prods, cats, custs, sett, usrs, brs, allInv, allOrders] = await Promise.all([
+        ApiService.getProducts(), ApiService.getCategories(), ApiService.getCustomers(), ApiService.getSettings(), ApiService.getUsers(), ApiService.getBranches(), ApiService.getInventory(), ApiService.getOrders()
+      ]);
+      StorageService.saveProducts(prods);
+      StorageService.saveCategories(cats);
+      StorageService.saveCustomers(custs);
+      const currentLocal = StorageService.getSettings(DEFAULT_SETTINGS);
+      StorageService.saveSettings({ ...sett, apiEndpoints: currentLocal.apiEndpoints });
+      StorageService.saveUsers(usrs);
+      StorageService.saveBranches(brs);
+      StorageService.saveInventory(allInv);
+      localStorage.setItem('printpro_orders', JSON.stringify(allOrders));
+      await loadData();
+      Swal.fire('Berhasil!', 'Data lokal telah diperbarui.', 'success');
+    } catch (err) {
+      Swal.fire('Gagal!', err instanceof Error ? err.message : 'Gagal', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleUpsertProduct = async (product: Product) => {
-    try {
-      if (useApi) { await ApiService.upsertProduct(product); }
-      else {
-        const all = StorageService.getProducts();
-        const existingIdx = all.findIndex(p => p.id === product.id);
-        const updated = existingIdx > -1 ? all.map(p => p.id === product.id ? product : p) : [product, ...all];
-        StorageService.saveProducts(updated);
-        setProducts(updated);
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal.' }); }
-  };
-
-  const handleDeleteProduct = async (id: string) => {
-    try {
-      if (useApi) { await ApiService.deleteProduct(id); }
-      else {
-        const all = StorageService.getProducts();
-        StorageService.saveProducts(all.filter(p => p.id !== id));
-      }
-      await loadData(true);
-      Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Produk dihapus', timer: 1000, showConfirmButton: false });
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus produk.' }); }
-  };
-
-  const handleUpsertCategory = async (category: CategoryItem) => {
-    try {
-      if (useApi) { await ApiService.upsertCategory(category); }
-      else {
-        const all = StorageService.getCategories();
-        const existingIdx = all.findIndex(c => c.id === category.id);
-        const updated = existingIdx > -1 ? all.map(c => c.id === category.id ? category : c) : [category, ...all];
-        StorageService.saveCategories(updated);
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan kategori.' }); }
-  };
-
-  const handleDeleteCategory = async (id: string) => {
-    try {
-      if (useApi) { await ApiService.deleteCategory(id); }
-      else {
-        const all = StorageService.getCategories();
-        StorageService.saveCategories(all.filter(c => c.id !== id));
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus kategori.' }); }
-  };
-
-  const handleUpsertInventory = async (item: InventoryItem) => {
-    try {
-      if (useApi) { await ApiService.upsertInventory(item); }
-      else {
-        const all = StorageService.getInventory();
-        const existingIdx = all.findIndex(i => i.id === item.id);
-        const updated = existingIdx > -1 ? all.map(i => i.id === item.id ? item : i) : [item, ...all];
-        StorageService.saveInventory(updated);
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan stok.' }); }
-  };
-
-  const handleDeleteInventory = async (id: string) => {
-    try {
-      if (useApi) { await ApiService.deleteInventory(id); }
-      else {
-        const all = StorageService.getInventory();
-        StorageService.saveInventory(all.filter(i => i.id !== id));
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus stok.' }); }
-  };
-
-  const handleUpsertUser = async (user: User) => {
-    try {
-      if (useApi) { await ApiService.upsertUser(user); }
-      else {
-        const all = StorageService.getUsers();
-        const existingIdx = all.findIndex(u => u.id === user.id);
-        const updated = existingIdx > -1 ? all.map(u => u.id === user.id ? user : u) : [user, ...all];
-        StorageService.saveUsers(updated);
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan user.' }); }
-  };
-
-  const handleDeleteUser = async (id: string) => {
-    try {
-      if (useApi) { await ApiService.deleteUser(id); }
-      else {
-        const all = StorageService.getUsers();
-        StorageService.saveUsers(all.filter(u => u.id !== id));
-      }
-      await loadData(true);
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menghapus user.' }); }
-  };
-
-  const handleUpdateSettings = async (newSettings: StoreSettings) => {
-    try {
-      if (useApi) { await ApiService.saveSettings(newSettings); }
-      else { StorageService.saveSettings(newSettings); }
-      setSettings(newSettings);
-      Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Pengaturan disimpan', timer: 1000, showConfirmButton: false });
-    } catch (e) { Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menyimpan pengaturan.' }); }
-  };
-
-  const handleUpdateProfile = async (updatedUser: User) => {
-    try {
-      if (useApi) { await ApiService.upsertUser(updatedUser); }
-      else {
-        const all = StorageService.getUsers();
-        const updated = all.map(u => u.id === updatedUser.id ? updatedUser : u);
-        StorageService.saveUsers(updated);
-      }
-      const { password, ...cleanUser } = updatedUser;
-      setCurrentUser(cleanUser as User);
-      sessionStorage.setItem('printpro_current_user', JSON.stringify(cleanUser));
-      await loadData(true);
-    } catch (err) { throw err; }
+  const handleExport = () => {
+    StorageService.exportAllData({ orders, products, inventory: StorageService.getInventory(), customers, categories, users, branches, settings });
   };
 
   const stats = useMemo(() => {
-    const activeOrders = (orders || []).filter(o => o.status !== OrderStatus.CANCELLED && o.status !== OrderStatus.RETURNED);
-    const problematicOrders = (orders || []).filter(o => o.status === OrderStatus.CANCELLED || o.status === OrderStatus.RETURNED);
+    const activeOrders = orders.filter(o => o.status !== OrderStatus.CANCELLED && o.status !== OrderStatus.RETURNED);
+    const problematicCount = orders.filter(o => o.status === OrderStatus.CANCELLED || o.status === OrderStatus.RETURNED).length;
     const today = new Date().toDateString();
-    
     const totalSales = activeOrders.filter(o => new Date(o.createdAt).toDateString() === today).reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
     const totalReceivable = activeOrders.reduce((sum, o) => sum + (Number(o.totalAmount || 0) - Number(o.paidAmount || 0)), 0);
     const pendingOrders = activeOrders.filter(o => o.status !== OrderStatus.DONE).length;
     const completedToday = activeOrders.filter(o => o.status === OrderStatus.DONE && new Date(o.createdAt).toDateString() === today).length;
-    
     const revenueByDay = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
       const amount = activeOrders.filter(o => new Date(o.createdAt).toDateString() === d.toDateString()).reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
       revenueByDay.push({ date: d.toLocaleDateString('id-ID', { weekday: 'short' }), amount });
     }
-
     const productMap: Record<string, number> = {};
     activeOrders.forEach(o => { o.items.forEach(item => { productMap[item.productName] = (productMap[item.productName] || 0) + item.quantity; }); });
     const productSales = Object.entries(productMap).map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
-
-    return { totalSales, totalReceivable, pendingOrders, completedToday, problematicCount: problematicOrders.length, revenueByDay, productSales };
+    return { totalSales, totalReceivable, pendingOrders, completedToday, problematicCount, revenueByDay, productSales };
   }, [orders]);
 
+  if (!currentUser) return <Login onLogin={(u, api, url) => { setCurrentUser(u); setUseApi(api); if (url) setCurrentApiUrl(url); sessionStorage.setItem('printpro_current_user', JSON.stringify(u)); }} />;
+
+  const activeBranch = branches.find(b => b.id === activeBranchId);
+  const activeEndpoint = settings.apiEndpoints?.find(ep => ep.url === currentApiUrl);
+
   const renderContent = () => {
-    if (apiError) return (
-      <div className="flex flex-col items-center justify-center h-[70vh] px-8 text-center">
-        <h3 className="text-xl font-black text-slate-900 mb-2">Server Tidak Merespon</h3>
-        <p className="text-sm text-slate-500 mb-8">{apiError}</p>
-        <div className="flex gap-4">
-          <button onClick={() => loadData()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">Coba Lagi</button>
-          <button onClick={() => setUseApi(false)} className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold">Mode Offline</button>
-        </div>
-      </div>
-    );
-    if (isLoading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-      <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-xs font-black text-indigo-600 animate-pulse tracking-widest uppercase">Sinkronisasi Data...</p>
-    </div>;
-    
+    if (apiError) return <div className="p-20 text-center"><p className="text-red-500 font-bold mb-4">{apiError}</p><button onClick={() => loadData()} className="bg-indigo-600 text-white px-6 py-2 rounded-xl">Coba Lagi</button></div>;
     switch (activeTab) {
-      case 'dashboard': return <Dashboard stats={stats as any} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
-      case 'new-order': return <NewOrder products={products} customers={customers} categories={categories} onAddOrder={handleAddOrder} />;
-      case 'orders': return <OrderHistory orders={orders} onUpdateStatus={handleUpdateOrderStatus} onUpdateOrder={handleUpdateOrder} onViewInvoice={setSelectedOrderForInvoice} />;
+      case 'dashboard': return <Dashboard stats={stats as any} recentOrders={orders} onUpdateStatus={(id, s) => saveAction(() => useApi ? ApiService.upsertOrder({...orders.find(o => o.id === id)!, status: s}) : Promise.resolve(StorageService.saveOrder({...orders.find(o => o.id === id)!, status: s})))} />;
+      case 'new-order': return <NewOrder products={products} customers={customers} categories={categories} onAddOrder={async (data) => {
+          const newOrder = { ...data, id: `ORD-${Date.now()}`, branchId: activeBranchId, createdAt: new Date(), status: OrderStatus.PENDING };
+          await saveAction(() => useApi ? ApiService.upsertOrder(newOrder) : Promise.resolve(StorageService.saveOrder(newOrder)));
+          setSelectedOrderForInvoice(newOrder);
+      }} />;
+      case 'orders': return <OrderHistory orders={orders} onUpdateStatus={(id, s) => saveAction(() => useApi ? ApiService.upsertOrder({...orders.find(o => o.id === id)!, status: s}) : Promise.resolve(StorageService.saveOrder({...orders.find(o => o.id === id)!, status: s})))} onUpdateOrder={o => saveAction(() => useApi ? ApiService.upsertOrder(o) : Promise.resolve(StorageService.saveOrder(o)))} onViewInvoice={setSelectedOrderForInvoice} />;
+      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onAddProduct={p => saveAction(() => useApi ? ApiService.upsertProduct(p) : Promise.resolve(StorageService.saveProducts([...products, p])))} onEditProduct={p => saveAction(() => useApi ? ApiService.upsertProduct(p) : Promise.resolve(StorageService.saveProducts(products.map(x => x.id === p.id ? p : x))))} onDeleteProduct={id => saveAction(() => useApi ? ApiService.deleteProduct(id) : Promise.resolve(StorageService.saveProducts(products.filter(x => x.id !== id))))} userRole={currentUser.role} />;
+      case 'categories': return <CategoryManager categories={categories} onAddCategory={c => saveAction(() => useApi ? ApiService.upsertCategory(c) : Promise.resolve(StorageService.saveCategories([...categories, c])))} onEditCategory={c => saveAction(() => useApi ? ApiService.upsertCategory(c) : Promise.resolve(StorageService.saveCategories(categories.map(x => x.id === c.id ? c : x))))} onDeleteCategory={id => saveAction(() => useApi ? ApiService.deleteCategory(id) : Promise.resolve(StorageService.saveCategories(categories.filter(x => x.id !== id))))} />;
+      
+      case 'inventory': return (
+        <Inventory 
+          items={inventory} 
+          branches={branches}
+          activeBranchId={activeBranchId}
+          onBranchChange={setActiveBranchId}
+          onAddInventory={i => saveAction(() => useApi ? ApiService.upsertInventory(i) : Promise.resolve(StorageService.saveInventory([...StorageService.getInventory(), i])))} 
+          onEditInventory={i => saveAction(() => useApi ? ApiService.upsertInventory(i) : Promise.resolve(StorageService.saveInventory(StorageService.getInventory().map(x => x.id === i.id ? i : x))))} 
+          onDeleteInventory={id => saveAction(() => useApi ? ApiService.deleteInventory(id) : Promise.resolve(StorageService.saveInventory(StorageService.getInventory().filter(x => x.id !== id))))} 
+          userRole={currentUser.role} 
+        />
+      );
+
+      case 'customers': return <Customers customers={customers} onEditCustomer={c => saveAction(() => useApi ? ApiService.upsertCustomer(c) : Promise.resolve(StorageService.saveCustomers(customers.map(x => x.id === c.id ? c : x))))} />;
       case 'reports': return <Reports orders={orders} products={products} categories={categories} />;
-      case 'catalog': return <Catalog products={products} inventory={inventory} categories={categories} onAddProduct={handleUpsertProduct} onEditProduct={handleUpsertProduct} onDeleteProduct={handleDeleteProduct} userRole={currentUser?.role} />;
-      case 'categories': return <CategoryManager categories={categories} onAddCategory={handleUpsertCategory} onEditCategory={handleUpsertCategory} onDeleteCategory={handleDeleteCategory} />;
-      case 'inventory': return <Inventory items={inventory} onAddInventory={handleUpsertInventory} onEditInventory={handleUpsertInventory} onDeleteInventory={handleDeleteInventory} userRole={currentUser?.role} />;
-      case 'customers': return <Customers customers={customers} onEditCustomer={() => {}} />;
-      case 'users': return <UserManager users={users} onAddUser={handleUpsertUser} onEditUser={handleUpsertUser} onDeleteUser={handleDeleteUser} />;
-      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={handleUpdateSettings} onPush={handlePushData} onPull={handlePullData} />;
-      case 'profile': return currentUser ? <Profile user={currentUser} onUpdate={handleUpdateProfile} /> : null;
-      default: return <Dashboard stats={stats as any} recentOrders={orders} onUpdateStatus={handleUpdateOrderStatus} />;
+      case 'settings': return <Settings initialSettings={settings} onUpdateSettings={s => saveAction(() => { StorageService.saveSettings(s); return useApi ? ApiService.saveSettings(s) : Promise.resolve(); })} onPush={handlePush} onPull={handlePull} onExport={handleExport} />;
+      case 'branches': return <BranchManager branches={branches} onAddBranch={b => saveAction(() => useApi ? ApiService.upsertBranch(b) : Promise.resolve(StorageService.saveBranches([...branches, b])))} onEditBranch={b => saveAction(() => useApi ? ApiService.upsertBranch(b) : Promise.resolve(StorageService.saveBranches(branches.map(x => x.id === b.id ? b : x))))} onDeleteBranch={id => saveAction(() => useApi ? ApiService.deleteBranch(id) : Promise.resolve(StorageService.saveBranches(branches.filter(x => x.id !== id))))} />;
+      case 'users': return <UserManager users={users} branches={branches} onAddUser={u => saveAction(() => useApi ? ApiService.upsertUser(u) : Promise.resolve(StorageService.saveUsers([...users, u])))} onEditUser={u => saveAction(() => useApi ? ApiService.upsertUser(u) : Promise.resolve(StorageService.saveUsers(users.map(x => x.id === u.id ? u : x))))} onDeleteUser={id => saveAction(() => useApi ? ApiService.deleteUser(id) : Promise.resolve(StorageService.saveUsers(users.filter(x => x.id !== id))))} />;
+      case 'profile': return <Profile user={currentUser} onUpdate={u => saveAction(() => useApi ? ApiService.upsertUser(u) : Promise.resolve(StorageService.saveUsers(users.map(x => x.id === u.id ? u : x))))} />;
+      default: return <Dashboard stats={stats as any} recentOrders={orders} />;
     }
   };
 
-  if (!currentUser) return <Login onLogin={handleLogin} />;
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
-      <div className="contents print:hidden">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
-      </div>
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} extraMenuItems={currentUser.role === UserRole.ADMIN ? [{ id: 'branches', label: 'Cabang / Outlet', icon: '🏪' }] : []} />
       <main className="flex-1 lg:ml-64 min-h-screen pb-20 lg:pb-0 print:hidden">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-40 shadow-sm">
            <div className="flex items-center gap-4">
-             <h2 className="font-black text-slate-900 uppercase tracking-tighter text-xs">{activeTab.replace('-', ' ')}</h2>
-             <span className={`px-3 py-1 rounded-full text-[9px] font-black border ${useApi ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-               {useApi ? 'ONLINE SERVER' : 'LOCAL OFFLINE'}
+             <div className="flex flex-col">
+               <h2 className="font-black text-slate-900 uppercase tracking-tighter text-[10px] leading-tight">{activeTab.replace('-', ' ')}</h2>
+               <div className="flex items-center gap-2 mt-0.5">
+                 <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${useApi ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                   {activeBranch?.name || 'Cabang...'} {useApi && activeEndpoint ? `• Site: ${activeEndpoint.name}` : ''}
+                 </p>
+               </div>
+             </div>
+           </div>
+           <div className="flex items-center gap-4">
+             {useApi && (
+               <div className="hidden md:flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                  <span className="text-[8px] font-black text-slate-400">SERVER</span>
+                  <span className="text-[9px] font-bold text-indigo-600 truncate max-w-[120px]">{currentApiUrl}</span>
+               </div>
+             )}
+             <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black border transition-all ${useApi ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+               {useApi ? 'ONLINE' : 'OFFLINE'}
              </span>
            </div>
-           <div className="flex items-center gap-3">
-             <button onClick={() => setActiveTab('profile')} className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-xs text-white font-black shadow-lg hover:scale-105 transition-transform">
-               {currentUser?.name?.charAt(0) || currentUser?.username?.charAt(0) || '?'}
-             </button>
-           </div>
         </header>
-        {renderContent()}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+            <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-[10px] font-black text-indigo-600 animate-pulse uppercase tracking-widest">Inisialisasi Database...</p>
+          </div>
+        ) : renderContent()}
       </main>
       {selectedOrderForInvoice && <InvoiceModal order={selectedOrderForInvoice} storeSettings={settings} onClose={() => setSelectedOrderForInvoice(null)} />}
     </div>

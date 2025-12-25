@@ -10,7 +10,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'https://apiprintpro.go',
+        target: 'https://kasirpro.thm.my.id',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/index.php/api'),
         secure: false, // Set false jika menggunakan self-signed SSL/HTTP

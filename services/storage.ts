@@ -1,5 +1,5 @@
 
-import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, PricingType, CategoryItem, User, UserRole } from '../types';
+import { Order, OrderStatus, Product, InventoryItem, StoreSettings, Customer, PricingType, CategoryItem, User, UserRole, Branch } from '../types';
 import { PRODUCTS, INITIAL_INVENTORY } from '../constants';
 
 const KEYS = {
@@ -10,14 +10,18 @@ const KEYS = {
   CUSTOMERS: 'printpro_customers',
   CATEGORIES: 'printpro_categories',
   USERS: 'printpro_users',
+  BRANCHES: 'printpro_branches',
   SESSION: 'printpro_session'
 };
 
-const INITIAL_USERS: User[] = [
-  { id: 'u-1', username: 'admin', name: 'Administrator', password: 'admin', role: UserRole.ADMIN }
+const INITIAL_BRANCHES: Branch[] = [
+  { id: 'br-main', name: 'Cabang Pusat', address: 'Jl. Utama No. 1', phone: '0812', isMainBranch: true }
 ];
 
-// Helper to get default categories since it's used in multiple places
+const INITIAL_USERS: User[] = [
+  { id: 'u-1', username: 'admin', name: 'Administrator', password: 'admin', role: UserRole.ADMIN, branchId: 'br-main' }
+];
+
 const DEFAULT_CATEGORIES: CategoryItem[] = [
   { id: 'cat-1', name: 'Digital A3+' },
   { id: 'cat-2', name: 'Outdoor Banner' },
@@ -26,6 +30,15 @@ const DEFAULT_CATEGORIES: CategoryItem[] = [
 ];
 
 export const StorageService = {
+  getBranches: (): Branch[] => {
+    const data = localStorage.getItem(KEYS.BRANCHES);
+    return data ? JSON.parse(data) : INITIAL_BRANCHES;
+  },
+
+  saveBranches: (branches: Branch[]) => {
+    localStorage.setItem(KEYS.BRANCHES, JSON.stringify(branches));
+  },
+
   getUsers: (): User[] => {
     const data = localStorage.getItem(KEYS.USERS);
     return data ? JSON.parse(data) : INITIAL_USERS;
@@ -39,48 +52,48 @@ export const StorageService = {
     const users = StorageService.getUsers();
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
-      const { password, ...userWithoutPassword } = user;
+      const { password: _, ...userWithoutPassword } = user;
       return userWithoutPassword as User;
     }
     return null;
   },
 
-  getCategories: (defaults: CategoryItem[] = DEFAULT_CATEGORIES): CategoryItem[] => {
-    const data = localStorage.getItem(KEYS.CATEGORIES);
-    return data ? JSON.parse(data) : defaults;
-  },
-
-  saveCategories: (categories: CategoryItem[]) => {
-    localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories));
-  },
-
-  getOrders: (): Order[] => {
+  getOrders: (branchId?: string): Order[] => {
     const data = localStorage.getItem(KEYS.ORDERS);
     if (!data) return [];
     try {
-      return JSON.parse(data).map((o: any) => ({ ...o, createdAt: new Date(o.createdAt) }));
+      const all: Order[] = JSON.parse(data).map((o: any) => ({ ...o, createdAt: new Date(o.createdAt) }));
+      return branchId ? all.filter(o => o.branchId === branchId) : all;
     } catch (e) { return []; }
   },
 
   saveOrder: (order: Order) => {
-    const orders = StorageService.getOrders();
-    const updatedOrders = [order, ...orders];
+    const data = localStorage.getItem(KEYS.ORDERS);
+    const orders = data ? JSON.parse(data) : [];
+    const existingIdx = orders.findIndex((o: any) => o.id === order.id);
+    let updatedOrders;
+    if (existingIdx >= 0) {
+      updatedOrders = [...orders];
+      updatedOrders[existingIdx] = order;
+    } else {
+      updatedOrders = [order, ...orders];
+      StorageService.adjustStockForOrder(order, 'deduct');
+      StorageService.syncCustomerFromOrder(order);
+    }
     localStorage.setItem(KEYS.ORDERS, JSON.stringify(updatedOrders));
-    StorageService.adjustStockForOrder(order, 'deduct');
-    StorageService.syncCustomerFromOrder(order);
     return order;
   },
 
-  adjustStockForOrder: (order: Order, type: 'deduct' | 'restore_full' | 'restore_recoverable') => {
+  adjustStockForOrder: (order: Order, type: 'deduct' | 'restore') => {
     const allProducts = StorageService.getProducts();
     const inventory = StorageService.getInventory();
     let changed = false;
+    
     order.items.forEach(item => {
       const product = allProducts.find(p => p.id === item.productId);
       if (product?.materials) {
         product.materials.forEach(link => {
-          if (type === 'restore_recoverable' && !link.isRecoverable) return;
-          const invIdx = inventory.findIndex(i => i.id === link.materialId);
+          const invIdx = inventory.findIndex(i => i.id === link.materialId && i.branchId === order.branchId);
           if (invIdx >= 0) {
             const area = (item.width || 1) * (item.height || 1);
             const total = product.pricingType === PricingType.DIMENSION 
@@ -105,13 +118,23 @@ export const StorageService = {
     localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
   },
 
-  getInventory: (): InventoryItem[] => {
+  getInventory: (branchId?: string): InventoryItem[] => {
     const data = localStorage.getItem(KEYS.INVENTORY);
-    return data ? JSON.parse(data) : INITIAL_INVENTORY;
+    const all: InventoryItem[] = data ? JSON.parse(data) : INITIAL_INVENTORY;
+    return branchId ? all.filter(i => i.branchId === branchId) : all;
   },
 
   saveInventory: (items: InventoryItem[]) => {
     localStorage.setItem(KEYS.INVENTORY, JSON.stringify(items));
+  },
+
+  getCategories: (): CategoryItem[] => {
+    const data = localStorage.getItem(KEYS.CATEGORIES);
+    return data ? JSON.parse(data) : DEFAULT_CATEGORIES;
+  },
+
+  saveCategories: (categories: CategoryItem[]) => {
+    localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(categories));
   },
 
   getCustomers: (): Customer[] => {
@@ -126,38 +149,26 @@ export const StorageService = {
     localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(customers));
   },
 
-  syncCustomerFromOrder: (order: Order): Customer[] => {
-    if (!order.customerName) return StorageService.getCustomers();
+  syncCustomerFromOrder: (order: Order) => {
     const customers = StorageService.getCustomers();
     const phone = (order.customerPhone || '').trim();
     const name = (order.customerName || '').trim();
-    
-    let existingIdx = -1;
-    if (phone) {
-      existingIdx = customers.findIndex(c => (c.phone || '').trim() === phone);
-    } else {
-      existingIdx = customers.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
-    }
-
+    if (!phone) return;
+    let existingIdx = customers.findIndex(c => c.phone === phone);
     if (existingIdx >= 0) {
       customers[existingIdx].totalOrders += 1;
-      customers[existingIdx].totalSpent += Number(order.totalAmount || 0);
-      if (name && customers[existingIdx].name !== name) {
-        customers[existingIdx].name = name;
-      }
+      customers[existingIdx].totalSpent += order.totalAmount;
     } else {
       customers.push({
-        id: `cust-${Date.now()}`,
-        name: name,
-        phone: phone,
+        id: `c-${Date.now()}`,
+        name,
+        phone,
         totalOrders: 1,
-        totalSpent: Number(order.totalAmount || 0),
+        totalSpent: order.totalAmount,
         joinDate: new Date()
       });
     }
-    
     StorageService.saveCustomers(customers);
-    return customers;
   },
 
   getSettings: (defaults: StoreSettings): StoreSettings => {
@@ -169,64 +180,57 @@ export const StorageService = {
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
   },
 
-  exportAllData: () => {
-    // Pastikan semua data diambil, termasuk fallback ke konstanta jika localStorage masih kosong
-    const fullData = {
-      orders: StorageService.getOrders(),
-      products: StorageService.getProducts(),
-      inventory: StorageService.getInventory(),
-      customers: StorageService.getCustomers(),
-      settings: StorageService.getSettings({
-        name: 'PrintPro Digital Solutions',
-        address: '',
-        phone: '',
-        email: '',
-        footerNote: '',
-        currency: 'IDR'
-      } as StoreSettings),
-      categories: StorageService.getCategories(DEFAULT_CATEGORIES),
-      users: StorageService.getUsers(),
-      exportDate: new Date().toISOString(),
-      appVersion: '1.0.0'
-    };
+  // Perbaikan Export: Menerima data asli bukan string mentah
+  exportAllData: (customData?: any) => {
+    let dataToExport: Record<string, any> = {};
     
-    const blob = new Blob([JSON.stringify(fullData, null, 2)], { type: 'application/json' });
+    if (customData) {
+      // Mapping keys correctly for custom state data
+      dataToExport[KEYS.ORDERS] = customData.orders;
+      dataToExport[KEYS.PRODUCTS] = customData.products;
+      dataToExport[KEYS.INVENTORY] = customData.inventory;
+      dataToExport[KEYS.CUSTOMERS] = customData.customers;
+      dataToExport[KEYS.CATEGORIES] = customData.categories;
+      dataToExport[KEYS.USERS] = customData.users;
+      dataToExport[KEYS.BRANCHES] = customData.branches;
+      dataToExport[KEYS.SETTINGS] = customData.settings;
+    } else {
+      // Fallback to current localStorage
+      Object.values(KEYS).forEach(key => {
+        const val = localStorage.getItem(key);
+        dataToExport[key] = val ? JSON.parse(val) : null;
+      });
+    }
+
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     link.href = url;
-    link.download = `printpro_backup_${timestamp}.json`;
+    link.download = `printpro_backup_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    URL.revokeObjectURL(url);
   },
 
-  importData: async (file: File): Promise<void> => {
+  // Perbaikan Import: Melakukan stringify kembali sebelum simpan ke localStorage
+  importData: (file: File): Promise<void> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
           const content = e.target?.result as string;
           const data = JSON.parse(content);
-          
-          // Validasi sederhana struktur data
-          if (!data.orders && !data.products && !data.inventory) {
-            throw new Error('Format file backup tidak dikenali atau data kosong.');
-          }
-
-          if (data.orders) localStorage.setItem(KEYS.ORDERS, JSON.stringify(data.orders));
-          if (data.products) localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(data.products));
-          if (data.inventory) localStorage.setItem(KEYS.INVENTORY, JSON.stringify(data.inventory));
-          if (data.customers) localStorage.setItem(KEYS.CUSTOMERS, JSON.stringify(data.customers));
-          if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
-          if (data.categories) localStorage.setItem(KEYS.CATEGORIES, JSON.stringify(data.categories));
-          if (data.users) localStorage.setItem(KEYS.USERS, JSON.stringify(data.users));
-          
+          Object.entries(data).forEach(([key, value]) => {
+            if (value !== null) {
+              // Simpan sebagai string JSON ke localStorage agar format konsisten
+              localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+            }
+          });
           resolve();
         } catch (err) {
-          reject(err);
+          reject(new Error('Format file backup tidak valid.'));
         }
       };
-      reader.onerror = () => reject(new Error('Gagal membaca file dari perangkat Anda.'));
+      reader.onerror = () => reject(new Error('Gagal membaca file.'));
       reader.readAsText(file);
     });
   }

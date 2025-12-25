@@ -2,13 +2,14 @@
 import { Product, PricingType, InventoryItem } from './types';
 
 export const INITIAL_INVENTORY: InventoryItem[] = [
-  { id: 'mat-1', name: 'Sticker Chromo A3+', category: 'Paper', stock: 500, minStock: 50, unit: 'sheet' },
-  { id: 'mat-2', name: 'Flexi China 280gr', category: 'Large Format', stock: 100, minStock: 20, unit: 'meter' },
-  { id: 'mat-3', name: 'Art Carton 260gr A3+', category: 'Paper', stock: 1000, minStock: 100, unit: 'sheet' },
-  { id: 'mat-4', name: 'Albatros Paper', category: 'Indoor', stock: 50, minStock: 10, unit: 'meter' },
-  { id: 'mat-5', name: 'Stand X-Banner 60x160', category: 'Display', stock: 30, minStock: 5, unit: 'pcs' },
-  { id: 'mat-6', name: 'Tinta Solvent (Cyan)', category: 'Ink', stock: 5000, minStock: 500, unit: 'ml' },
-  { id: 'mat-7', name: 'Laminasi Doff A3+', category: 'Finishing', stock: 200, minStock: 20, unit: 'sheet' },
+  // Added branchId: 'br-main' to all initial inventory items
+  { id: 'mat-1', name: 'Sticker Chromo A3+', category: 'Paper', stock: 500, minStock: 50, unit: 'sheet', branchId: 'br-main' },
+  { id: 'mat-2', name: 'Flexi China 280gr', category: 'Large Format', stock: 100, minStock: 20, unit: 'meter', branchId: 'br-main' },
+  { id: 'mat-3', name: 'Art Carton 260gr A3+', category: 'Paper', stock: 1000, minStock: 100, unit: 'sheet', branchId: 'br-main' },
+  { id: 'mat-4', name: 'Albatros Paper', category: 'Indoor', stock: 50, minStock: 10, unit: 'meter', branchId: 'br-main' },
+  { id: 'mat-5', name: 'Stand X-Banner 60x160', category: 'Display', stock: 30, minStock: 5, unit: 'pcs', branchId: 'br-main' },
+  { id: 'mat-6', name: 'Tinta Solvent (Cyan)', category: 'Ink', stock: 5000, minStock: 500, unit: 'ml', branchId: 'br-main' },
+  { id: 'mat-7', name: 'Laminasi Doff A3+', category: 'Finishing', stock: 200, minStock: 20, unit: 'sheet', branchId: 'br-main' },
 ];
 
 export const PRODUCTS: Product[] = [

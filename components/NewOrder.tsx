@@ -12,6 +12,7 @@ interface NewOrderProps {
 const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], categories = [], onAddOrder }) => {
   const [customer, setCustomer] = useState({ name: '', phone: '' });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | 'All'>('All');
+  const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [paidAmount, setPaidAmount] = useState<string>('');
@@ -113,8 +114,13 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
   }, [cart]);
 
   const filteredProducts = useMemo(() => {
-    return (products || []).filter(p => selectedCategoryId === 'All' || p.categoryId === selectedCategoryId);
-  }, [products, selectedCategoryId]);
+    return (products || []).filter(p => {
+      const matchesCategory = selectedCategoryId === 'All' || p.categoryId === selectedCategoryId;
+      const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+                          (p.description || '').toLowerCase().includes(productSearch.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategoryId, productSearch]);
 
   const handleSubmit = () => {
     if (!customer.name.trim() || cart.length === 0) {
@@ -122,10 +128,8 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
       return;
     }
     
-    // Pastikan nilai numerik bersih
     const finalPaidAmount = paidAmount.trim() === '' ? total : Number(paidAmount);
     
-    // Kirim data dengan struktur yang diharapkan Backend
     onAddOrder({
       customerName: customer.name.trim(),
       customerPhone: customer.phone.trim(),
@@ -135,7 +139,6 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
       paymentMethod: paymentMethod,
     });
     
-    // Reset form
     setCustomer({ name: '', phone: '' });
     setCart([]);
     setPaidAmount('');
@@ -146,18 +149,39 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
     <div className="p-4 md:p-8 flex flex-col lg:grid lg:grid-cols-3 gap-8 pb-24">
       <div className="lg:col-span-2 space-y-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-          <div className="flex flex-col sm:flex-row justify-between mb-6 gap-4">
-            <h3 className="text-xl font-bold">Produk & Jasa</h3>
-            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-              {[{ id: 'All', name: 'All' }, ...categories].map(cat => (
+          <div className="flex flex-col mb-6 gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h3 className="text-xl font-bold">Produk & Jasa</h3>
+              <div className="relative w-full sm:w-64 group">
+                <input 
+                  type="text" 
+                  placeholder="Cari produk..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                />
+                <span className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors text-xs">🔍</span>
+                {productSearch && (
+                  <button 
+                    onClick={() => setProductSearch('')}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar border-b border-slate-50">
+              {[{ id: 'All', name: 'Semua Layanan' }, ...categories].map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategoryId(cat.id)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                    selectedCategoryId === cat.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-50'
+                  className={`px-4 py-1.5 rounded-full text-[10px] font-black border transition-all whitespace-nowrap ${
+                    selectedCategoryId === cat.id ? 'bg-indigo-600 text-white shadow-md border-indigo-600' : 'bg-white text-slate-500 hover:bg-slate-50 border-slate-200'
                   }`}
                 >
-                  {cat.name}
+                  {cat.name.toUpperCase()}
                 </button>
               ))}
             </div>
@@ -171,21 +195,27 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
                 className="p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 text-left transition-all flex flex-col h-full group relative"
               >
                 {product.priceRanges && product.priceRanges.length > 0 && (
-                  <span className="absolute -top-2 -right-1 bg-amber-500 text-white text-[8px] font-black px-2 py-1 rounded-full shadow-sm z-10 animate-bounce">GROSIR</span>
+                  <span className="absolute -top-2 -right-1 bg-amber-500 text-white text-[8px] font-black px-2 py-1 rounded-full shadow-sm z-10 animate-bounce uppercase">Grosir</span>
                 )}
                 <div className="flex justify-between items-start mb-2">
                   <p className="font-bold text-sm group-hover:text-indigo-600 leading-tight">{product.name}</p>
-                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${product.pricingType === PricingType.DIMENSION ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                    {product.pricingType === PricingType.DIMENSION ? 'Meter' : 'Pcs'}
+                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase flex-shrink-0 ml-1 ${product.pricingType === PricingType.DIMENSION ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                    {product.pricingType === PricingType.DIMENSION ? 'm²' : 'Pcs'}
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-400 mb-4 line-clamp-2">{product.description}</p>
+                <p className="text-[10px] text-slate-400 mb-4 line-clamp-2 leading-relaxed">{product.description}</p>
                 <div className="mt-auto">
-                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Mulai dari</p>
-                   <p className="text-xs font-black text-slate-900">Rp {(Number(product.basePrice) || 0).toLocaleString()}</p>
+                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Harga Dasar</p>
+                   <p className="text-sm font-black text-slate-900">Rp {(Number(product.basePrice) || 0).toLocaleString()}</p>
                 </div>
               </button>
             ))}
+            {filteredProducts.length === 0 && (
+              <div className="col-span-full py-12 text-center">
+                <p className="text-4xl mb-4 grayscale">🔎</p>
+                <p className="text-slate-400 text-xs font-black uppercase tracking-widest">Produk tidak ditemukan</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -220,25 +250,27 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
               />
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Metode Pembayaran</label>
-              <select 
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                value={paymentMethod}
-                onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
-              >
-                {Object.values(PaymentMethod).map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Jumlah Bayar / DP (Kosongkan jika Lunas)</label>
-              <input 
-                type="number" 
-                className="w-full px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl text-sm font-black text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
-                placeholder={`Total: ${total.toLocaleString()}`}
-                value={paidAmount} 
-                onChange={e => setPaidAmount(e.target.value)} 
-              />
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Metode Pembayaran</label>
+                <select 
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value as PaymentMethod)}
+                >
+                  {Object.values(PaymentMethod).map(m => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Jumlah Bayar / DP</label>
+                <input 
+                  type="number" 
+                  className="w-full px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl text-sm font-black text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-500 transition-all" 
+                  placeholder={`Total: Rp ${total.toLocaleString()}`}
+                  value={paidAmount} 
+                  onChange={e => setPaidAmount(e.target.value)} 
+                />
+              </div>
             </div>
           </div>
 
@@ -246,14 +278,14 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
             {cart.map(item => (
               <div key={item.id} className="bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
                 <div className="flex justify-between mb-2">
-                   <p className="font-bold text-sm truncate pr-2">{item.productName}</p>
-                   <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600 text-xs font-bold">✕</button>
+                   <p className="font-bold text-sm truncate pr-2 leading-tight">{item.productName}</p>
+                   <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600 text-xs font-bold transition-colors">✕</button>
                 </div>
 
                 {item.width !== undefined && (
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">P (meter)</label>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">P (m)</label>
                       <input 
                         type="number" 
                         step="0.1"
@@ -263,7 +295,7 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">L (meter)</label>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">L (m)</label>
                       <input 
                         type="number" 
                         step="0.1"
@@ -277,17 +309,22 @@ const NewOrder: React.FC<NewOrderProps> = ({ products = [], customers = [], cate
 
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-sm">
-                    <button onClick={() => updateItem(item.id, { quantity: Math.max(1, Number(item.quantity) - 1) })} className="w-6 h-6 flex items-center justify-center text-slate-400 font-bold hover:bg-slate-50 rounded-lg">-</button>
+                    <button onClick={() => updateItem(item.id, { quantity: Math.max(1, Number(item.quantity) - 1) })} className="w-6 h-6 flex items-center justify-center text-slate-400 font-bold hover:bg-slate-50 rounded-lg transition-colors">-</button>
                     <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
-                    <button onClick={(() => updateItem(item.id, { quantity: Number(item.quantity) + 1 }))} className="w-6 h-6 flex items-center justify-center text-slate-400 font-bold hover:bg-slate-50 rounded-lg">+</button>
+                    <button onClick={(() => updateItem(item.id, { quantity: Number(item.quantity) + 1 }))} className="w-6 h-6 flex items-center justify-center text-slate-400 font-bold hover:bg-slate-50 rounded-lg transition-colors">+</button>
                   </div>
                   <div className="text-right">
-                    {item.isRangePrice && <p className="text-[8px] font-black text-amber-500 uppercase tracking-tighter">HARGA GROSIR</p>}
+                    {item.isRangePrice && <p className="text-[8px] font-black text-amber-500 uppercase tracking-tighter">Grosir</p>}
                     <p className="font-black text-indigo-600 text-sm">Rp {Number(item.totalPrice || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
             ))}
+            {cart.length === 0 && (
+              <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Keranjang Kosong</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 pt-4 border-t border-slate-100">

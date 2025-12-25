@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import React, { useState, useEffect } from 'react';
+import { User, UserRole, ApiEndpoint } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiService } from '../services/api';
 
 interface LoginProps {
-  onLogin: (user: User, isApiMode: boolean) => void;
+  onLogin: (user: User, isApiMode: boolean, apiUrl?: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -14,6 +14,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApiMode, setIsApiMode] = useState(() => localStorage.getItem('printpro_use_api') === 'true');
+  const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([]);
+  const [selectedApiId, setSelectedApiId] = useState('');
+
+  useEffect(() => {
+    const settings = StorageService.getSettings({ apiEndpoints: [] } as any);
+    const savedEndpoints = settings.apiEndpoints || [];
+    setEndpoints(savedEndpoints);
+    if (savedEndpoints.length > 0) {
+      setSelectedApiId(savedEndpoints[0].id);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,8 +33,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       if (isApiMode) {
+        const selectedEndpoint = endpoints.find(e => e.id === selectedApiId);
+        if (!selectedEndpoint) {
+          throw new Error('Silakan tambahkan API Endpoint di Pengaturan terlebih dahulu atau gunakan mode Lokal.');
+        }
+        
+        ApiService.setBaseUrl(selectedEndpoint.url);
         const user = await ApiService.login(username, password);
-        onLogin(user, true);
+        onLogin(user, true, selectedEndpoint.url);
       } else {
         const user = StorageService.authenticate(username, password);
         if (user) {
@@ -51,7 +68,31 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-2">
+               <span className="text-[10px] font-bold text-slate-400 uppercase">Mode Sistem</span>
+               <button 
+                type="button"
+                onClick={() => setIsApiMode(!isApiMode)}
+                className={`px-4 py-1.5 rounded-xl text-[10px] font-black border transition-all ${isApiMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200'}`}
+               >
+                 {isApiMode ? '☁️ ONLINE' : '💻 LOCAL'}
+               </button>
+            </div>
+
+            {isApiMode && endpoints.length > 0 && (
+              <div className="animate-in slide-in-from-top-2 duration-300">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Pilih Server / Site</label>
+                <select 
+                  className="w-full px-5 py-3.5 bg-indigo-50 border border-indigo-100 rounded-2xl outline-none font-bold text-indigo-700 text-xs"
+                  value={selectedApiId}
+                  onChange={e => setSelectedApiId(e.target.value)}
+                >
+                  {endpoints.map(ep => <option key={ep.id} value={ep.id}>{ep.name.toUpperCase()} ({ep.url})</option>)}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Username</label>
               <input 
@@ -76,17 +117,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
-               <span className="text-[10px] font-bold text-slate-400 uppercase">Mode Sistem</span>
-               <button 
-                type="button"
-                onClick={() => setIsApiMode(!isApiMode)}
-                className={`px-4 py-1.5 rounded-xl text-[10px] font-black border transition-all ${isApiMode ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200'}`}
-               >
-                 {isApiMode ? '☁️ SERVER' : '💻 LOCAL'}
-               </button>
-            </div>
-
             {error && (
               <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold border border-red-100 animate-pulse">
                 ⚠️ {error}
@@ -98,13 +128,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               disabled={isLoading}
               className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
             >
-              {isLoading ? 'Mengecek...' : 'MASUK KE SISTEM'}
+              {isLoading ? 'Menghubungkan...' : 'MASUK KE SISTEM'}
             </button>
           </form>
         </div>
 
         <div className="mt-8 text-center">
-           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Default Local: admin / admin</p>
+           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+             {isApiMode ? 'Butuh Server Baru? Tambahkan di Pengaturan (Admin)' : 'Default Local: admin / admin'}
+           </p>
         </div>
       </div>
     </div>
