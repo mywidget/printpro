@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>PrintPro - Sistem Manajemen &amp; POS Percetakan Modern</title>
+  <link>https://printpro.my.id</link>
+  <description>Platform all-in-one untuk manajemen cetak, kasir POS, kuotasi harga, kelola inventaris, pembukuan keuangan, dan sistem undangan online terintegrasi.</description>
+  <language>id-id</language>
+  <copyright>Copyright 2026 PrintPro. All rights reserved.</copyright>
+  <lastBuildDate>Wed, 08 Jul 2026 12:20:00 GMT</lastBuildDate>
+  <atom:link href="https://printpro.my.id/rss.xml" rel="self" type="application/rss+xml" />
+
+  <item>
+    <title>Sistem POS Percetakan All-in-One Terintegrasi</title>
+    <link>https://printpro.my.id/</link>
+    <guid isPermaLink="true">https://printpro.my.id/#pos-sistem</guid>
+    <pubDate>Wed, 08 Jul 2026 12:00:00 GMT</pubDate>
+    <description><![CDATA[Kelola seluruh operasional percetakan Anda mulai dari pencatatan pesanan (order), tracking antrean produksi, riwayat kerja operator, hingga manajemen keuangan kasbon, piutang, dan jurnal akuntansi dalam satu dashboard interaktif.]]></description>
+  </item>
+
+  <item>
+    <title>Undangan Online Suite &amp; Katalog Bahan Digital</title>
+    <link>https://printpro.my.id/</link>
+    <guid isPermaLink="true">https://printpro.my.id/#undangan-suite</guid>
+    <pubDate>Wed, 01 Jul 2026 09:00:00 GMT</pubDate>
+    <description><![CDATA[PrintPro kini dilengkapi dengan Undangan Online Suite dan integrasi stok gudang otomatis untuk produk cetak kustom, undangan fisik, cetak baju, dan buku tabungan/pajak secara instan.]]></description>
+  </item>
+
+  <item>
+    <title>Layanan Bantuan &amp; Dukungan Pelanggan Resmi</title>
+    <link>https://printpro.my.id/support</link>
+    <guid isPermaLink="true">https://printpro.my.id/support</guid>
+    <pubDate>Tue, 30 Jun 2026 15:00:00 GMT</pubDate>
+    <description><![CDATA[Butuh panduan instalasi, integrasi printer thermal, konfigurasi tim operator, atau kustomisasi cetak nota? Tim support teknis kami siap membantu operasional usaha percetakan Anda berjalan tanpa kendala.]]></description>
+  </item>
+</channel>
+</rss>

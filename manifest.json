@@ -1,0 +1,23 @@
+
+{
+  "name": "PrintPro POS Printing Management",
+  "short_name": "PrintPro",
+  "description": "Smart cashier and workshop management for printing businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
