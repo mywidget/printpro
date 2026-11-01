@@ -4,8 +4,8 @@
     "name": "browser",
     "isDynamicEntry": true
   },
-  "_jspdf.es.min-BNcoSiww.js": {
-    "file": "assets/jspdf.es.min-BNcoSiww.js",
+  "_jspdf.es.min-CayhJjcu.js": {
+    "file": "assets/jspdf.es.min-CayhJjcu.js",
     "name": "jspdf.es.min",
     "isDynamicEntry": true,
     "imports": [
@@ -18,38 +18,38 @@
     ]
   },
   "index.html": {
-    "file": "assets/index-DJ_SlqO9.js",
+    "file": "assets/index-CQ_NKVkc.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "dynamicImports": [
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
       "_browser-BXdiCFWD.js",
       "_browser-BXdiCFWD.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js",
-      "_jspdf.es.min-BNcoSiww.js"
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js",
+      "_jspdf.es.min-CayhJjcu.js"
     ],
     "css": [
-      "assets/index-w09bwOZi.css"
+      "assets/index-F1_xrKan.css"
     ]
   },
   "node_modules/canvg/lib/index.es.js": {
-    "file": "assets/index.es-DyWAyQF8.js",
+    "file": "assets/index.es-DV0dUPP3.js",
     "name": "index.es",
     "src": "node_modules/canvg/lib/index.es.js",
     "isDynamicEntry": true,
     "imports": [
       "index.html",
-      "_jspdf.es.min-BNcoSiww.js"
+      "_jspdf.es.min-CayhJjcu.js"
     ]
   },
   "node_modules/dompurify/dist/purify.es.mjs": {
