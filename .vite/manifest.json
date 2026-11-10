@@ -4,8 +4,8 @@
     "name": "browser",
     "isDynamicEntry": true
   },
-  "_jspdf.es.min-DzJqZU3N.js": {
-    "file": "assets/jspdf.es.min-DzJqZU3N.js",
+  "_jspdf.es.min-C13L_ANP.js": {
+    "file": "assets/jspdf.es.min-C13L_ANP.js",
     "name": "jspdf.es.min",
     "isDynamicEntry": true,
     "imports": [
@@ -18,41 +18,41 @@
     ]
   },
   "index.html": {
-    "file": "assets/index-AhvjICmu.js",
+    "file": "assets/index-B7h8fkPI.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "dynamicImports": [
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
       "_browser-BXdiCFWD.js",
       "_browser-BXdiCFWD.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js",
-      "_jspdf.es.min-DzJqZU3N.js"
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js",
+      "_jspdf.es.min-C13L_ANP.js"
     ],
     "css": [
       "assets/index-qJozx-03.css"
     ]
   },
   "node_modules/canvg/lib/index.es.js": {
-    "file": "assets/index.es-DOQj8Fqe.js",
+    "file": "assets/index.es-CY0GSGww.js",
     "name": "index.es",
     "src": "node_modules/canvg/lib/index.es.js",
     "isDynamicEntry": true,
     "imports": [
       "index.html",
-      "_jspdf.es.min-DzJqZU3N.js"
+      "_jspdf.es.min-C13L_ANP.js"
     ]
   },
   "node_modules/dompurify/dist/purify.es.mjs": {
-    "file": "assets/purify.es-DDpmou9H.js",
+    "file": "assets/purify.es-CAi2OJFm.js",
     "name": "purify.es",
     "src": "node_modules/dompurify/dist/purify.es.mjs",
     "isDynamicEntry": true
